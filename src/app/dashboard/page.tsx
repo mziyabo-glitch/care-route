@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { LogoutButton } from "@/app/dashboard/logout-button";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -25,7 +26,10 @@ export default async function DashboardPage() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-16">
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+          <LogoutButton />
+        </div>
         <p className="mt-3 text-sm text-gray-700">
           You are signed in as{" "}
           <span className="font-medium text-gray-900">{user.email}</span>.
