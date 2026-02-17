@@ -6,8 +6,9 @@ import { CreateClientModal } from "./create-client-modal";
 type Client = {
   id: string;
   name: string | null;
-  email: string | null;
-  phone: string | null;
+  address: string | null;
+  postcode: string | null;
+  notes: string | null;
 };
 
 export function ClientsList({
@@ -28,7 +29,7 @@ export function ClientsList({
             onClick={() => setShowModal(true)}
             className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
           >
-            Add client
+            Add Client
           </button>
         </div>
         <ul className="divide-y divide-gray-200">
@@ -40,10 +41,13 @@ export function ClientsList({
             clients.map((c) => (
               <li key={c.id} className="px-4 py-4">
                 <div className="font-medium text-gray-900">{c.name}</div>
-                {(c.email || c.phone) && (
+                {(c.address || c.postcode) && (
                   <div className="mt-1 text-sm text-gray-500">
-                    {[c.email, c.phone].filter(Boolean).join(" · ")}
+                    {[c.address, c.postcode].filter(Boolean).join(", ")}
                   </div>
+                )}
+                {c.notes && (
+                  <div className="mt-1 text-sm text-gray-600">{c.notes}</div>
                 )}
               </li>
             ))

@@ -34,7 +34,7 @@ export function CreateClientModal({
         className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-gray-900">Add client</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Add Client</h2>
         <form action={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label
@@ -54,32 +54,47 @@ export function CreateClientModal({
           </div>
           <div>
             <label
-              htmlFor="client-email"
+              htmlFor="client-address"
               className="mb-1 block text-sm font-medium text-gray-700"
             >
-              Email
+              Address
             </label>
             <input
-              id="client-email"
-              name="email"
-              type="email"
+              id="client-address"
+              name="address"
+              type="text"
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
-              placeholder="email@example.com"
+              placeholder="Street address"
             />
           </div>
           <div>
             <label
-              htmlFor="client-phone"
+              htmlFor="client-postcode"
               className="mb-1 block text-sm font-medium text-gray-700"
             >
-              Phone
+              Postcode
             </label>
             <input
-              id="client-phone"
-              name="phone"
-              type="tel"
+              id="client-postcode"
+              name="postcode"
+              type="text"
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
-              placeholder="Phone number"
+              placeholder="Postcode"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="client-notes"
+              className="mb-1 block text-sm font-medium text-gray-700"
+            >
+              Notes
+            </label>
+            <textarea
+              id="client-notes"
+              name="notes"
+              rows={3}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+              placeholder="Optional notes"
             />
           </div>
           {error ? (

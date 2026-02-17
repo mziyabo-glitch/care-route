@@ -20,7 +20,7 @@ export default async function ClientsPage() {
 
   const { data: clients } = await supabase
     .from("clients")
-    .select("id, name, email, phone")
+    .select("id, name, address, postcode, notes")
     .eq("agency_id", membership.agency_id)
     .order("name");
 
