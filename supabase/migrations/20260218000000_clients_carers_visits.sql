@@ -47,18 +47,21 @@ alter table public.carers enable row level security;
 alter table public.visits enable row level security;
 
 -- RLS: membership check via agency_members only (no agencies) to avoid recursion.
+drop policy if exists "clients_select" on public.clients;
 create policy "clients_select"
 on public.clients for select to authenticated
 using (
   agency_id in (select agency_id from public.agency_members where user_id = auth.uid())
 );
 
+drop policy if exists "clients_insert" on public.clients;
 create policy "clients_insert"
 on public.clients for insert to authenticated
 with check (
   agency_id in (select agency_id from public.agency_members where user_id = auth.uid())
 );
 
+drop policy if exists "clients_update" on public.clients;
 create policy "clients_update"
 on public.clients for update to authenticated
 using (
@@ -68,24 +71,28 @@ with check (
   agency_id in (select agency_id from public.agency_members where user_id = auth.uid())
 );
 
+drop policy if exists "clients_delete" on public.clients;
 create policy "clients_delete"
 on public.clients for delete to authenticated
 using (
   agency_id in (select agency_id from public.agency_members where user_id = auth.uid())
 );
 
+drop policy if exists "carers_select" on public.carers;
 create policy "carers_select"
 on public.carers for select to authenticated
 using (
   agency_id in (select agency_id from public.agency_members where user_id = auth.uid())
 );
 
+drop policy if exists "carers_insert" on public.carers;
 create policy "carers_insert"
 on public.carers for insert to authenticated
 with check (
   agency_id in (select agency_id from public.agency_members where user_id = auth.uid())
 );
 
+drop policy if exists "carers_update" on public.carers;
 create policy "carers_update"
 on public.carers for update to authenticated
 using (
@@ -95,24 +102,28 @@ with check (
   agency_id in (select agency_id from public.agency_members where user_id = auth.uid())
 );
 
+drop policy if exists "carers_delete" on public.carers;
 create policy "carers_delete"
 on public.carers for delete to authenticated
 using (
   agency_id in (select agency_id from public.agency_members where user_id = auth.uid())
 );
 
+drop policy if exists "visits_select" on public.visits;
 create policy "visits_select"
 on public.visits for select to authenticated
 using (
   agency_id in (select agency_id from public.agency_members where user_id = auth.uid())
 );
 
+drop policy if exists "visits_insert" on public.visits;
 create policy "visits_insert"
 on public.visits for insert to authenticated
 with check (
   agency_id in (select agency_id from public.agency_members where user_id = auth.uid())
 );
 
+drop policy if exists "visits_update" on public.visits;
 create policy "visits_update"
 on public.visits for update to authenticated
 using (
@@ -122,6 +133,7 @@ with check (
   agency_id in (select agency_id from public.agency_members where user_id = auth.uid())
 );
 
+drop policy if exists "visits_delete" on public.visits;
 create policy "visits_delete"
 on public.visits for delete to authenticated
 using (
