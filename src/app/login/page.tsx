@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type AuthMode = "password" | "magic-link";
-type AuthAction = "sign-in" | "sign-up" | "magic-link" | null;
+type AuthAction =
+  | "sign-in"
+  | "sign-up"
+  | "magic-link"
+  | "forgot-password"
+  | null;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,6 +22,21 @@ export default function LoginPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        router.replace("/dashboard");
+      }
+    };
+
+    void checkExistingSession();
+  }, [router]);
+
   const normalizeErrorMessage = (message: string) => {
     const lower = message.toLowerCase();
     if (
@@ -24,6 +44,9 @@ export default function LoginPage() {
       lower.includes("email rate limit exceeded")
     ) {
       return "Too many emails sent. Please wait a few minutes, or use Password login.";
+    }
+    if (lower.includes("invalid login credentials")) {
+      return "Invalid email or password. Please try again, reset your password, or create an account.";
     }
     return message;
   };
@@ -81,6 +104,32 @@ export default function LoginPage() {
     }
 
     setSuccessMessage("Magic link sent. Check your email to continue.");
+  };
+
+  const onForgotPassword = async () => {
+    setAuthAction("forgot-password");
+    setLoading(true);
+    setSuccessMessage("");
+    setErrorMessage("");
+
+    const supabase = createClient();
+    const redirectTo = `${window.location.origin}/update-password`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo,
+    });
+
+    if (error) {
+      setErrorMessage(normalizeErrorMessage(error.message));
+      setLoading(false);
+      setAuthAction(null);
+      return;
+    }
+
+    setSuccessMessage(
+      "Password reset email sent. Open the link in your inbox to set a new password.",
+    );
+    setLoading(false);
+    setAuthAction(null);
   };
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -211,6 +260,19 @@ export default function LoginPage() {
               {loading && authAction === "sign-up"
                 ? "Creating account..."
                 : "Create account"}
+            </button>
+          ) : null}
+
+          {mode === "password" ? (
+            <button
+              type="button"
+              onClick={() => void onForgotPassword()}
+              disabled={loading || !email}
+              className="w-full text-sm font-medium text-indigo-600 transition hover:text-indigo-500 disabled:cursor-not-allowed disabled:text-gray-400"
+            >
+              {loading && authAction === "forgot-password"
+                ? "Sending reset link..."
+                : "Forgot password?"}
             </button>
           ) : null}
         </form>
