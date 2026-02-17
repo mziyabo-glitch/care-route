@@ -1,5 +1,10 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Production Configuration
+
+- Production URL: https://care-route-two.vercel.app
+- Do not use Vercel preview URLs for Supabase redirect URLs. Use only the production domain above for auth redirects.
+
 ## Getting Started
 
 First, run the development server:
