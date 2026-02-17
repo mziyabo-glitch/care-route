@@ -1,8 +1,15 @@
 alter table public.agencies
   add column if not exists owner_id uuid;
 
+-- Backfill owner_id from created_by where possible.
 update public.agencies
-set owner_id = coalesce(owner_id, created_by)
+set owner_id = created_by
+where owner_id is null
+  and created_by is not null;
+
+-- Remove orphan agencies that have no identifiable owner at all.
+-- These are leftover rows with both owner_id and created_by NULL.
+delete from public.agencies
 where owner_id is null;
 
 alter table public.agencies
