@@ -11,6 +11,17 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
+  const { data: membership } = await supabase
+    .from("agency_members")
+    .select("agency_id")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!membership) {
+    redirect("/onboarding");
+  }
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-16">
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
