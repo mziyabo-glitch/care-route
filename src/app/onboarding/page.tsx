@@ -49,6 +49,7 @@ export default function OnboardingPage() {
 
     if (!user) {
       router.replace("/login");
+      setLoading(false);
       return;
     }
 
@@ -59,31 +60,44 @@ export default function OnboardingPage() {
       return;
     }
 
-    const { data: agency, error: agencyError } = await supabase
-      .from("agencies")
-      .insert({
-        name: agencyName,
-        created_by: user.id,
-      })
-      .select("id")
-      .single();
+    const { error: rpcError } = await supabase.rpc(
+      "create_agency_and_membership",
+      {
+        p_name: agencyName,
+      },
+    );
 
-    if (agencyError || !agency) {
-      setErrorMessage(agencyError?.message ?? "Unable to create agency.");
-      setLoading(false);
-      return;
-    }
+    if (rpcError) {
+      // Fallback path while DB migration catches up.
+      const { data: agency, error: agencyError } = await supabase
+        .from("agencies")
+        .insert({
+          name: agencyName,
+          owner_id: user.id,
+          created_by: user.id,
+        })
+        .select("id")
+        .single();
 
-    const { error: memberError } = await supabase.from("agency_members").insert({
-      agency_id: agency.id,
-      user_id: user.id,
-      role: "owner",
-    });
+      if (agencyError || !agency) {
+        setErrorMessage(agencyError?.message ?? "Unable to create agency.");
+        setLoading(false);
+        return;
+      }
 
-    if (memberError) {
-      setErrorMessage(memberError.message);
-      setLoading(false);
-      return;
+      const { error: memberError } = await supabase
+        .from("agency_members")
+        .insert({
+          agency_id: agency.id,
+          user_id: user.id,
+          role: "owner",
+        });
+
+      if (memberError) {
+        setErrorMessage(memberError.message);
+        setLoading(false);
+        return;
+      }
     }
 
     router.replace("/dashboard");
