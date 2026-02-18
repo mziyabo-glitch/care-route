@@ -350,6 +350,9 @@ export default function RotaPage() {
                                   const hasConflict = grouped.conflictIds.has(v.id);
                                   const travel = grouped.travelTightByVisit[v.id];
                                   const travelRatio = travel ? travel.gap / travel.need : 1;
+                                  const baseCardClass = v.is_joint
+                                    ? "border-violet-400 bg-violet-50 hover:border-violet-500 hover:bg-violet-100"
+                                    : "border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50";
                                   return (
                                     <button
                                       key={`${v.id}-${carer.id}`}
@@ -358,9 +361,14 @@ export default function RotaPage() {
                                       className={`block w-full rounded-md border px-2 py-1.5 text-left text-xs transition ${
                                         hasConflict
                                           ? "border-red-500 bg-red-50 hover:border-red-600 hover:bg-red-100"
-                                          : "border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50"
+                                          : baseCardClass
                                       }`}
                                     >
+                                      {v.is_joint && (
+                                        <div className="mb-1 rounded bg-violet-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-900">
+                                          Joint visit
+                                        </div>
+                                      )}
                                       <div className="flex items-center gap-1 font-medium text-gray-900">
                                         {hasConflict && (
                                           <span className="text-amber-600" title="Overlap">
