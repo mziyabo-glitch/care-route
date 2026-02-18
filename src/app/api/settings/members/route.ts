@@ -8,10 +8,17 @@ export async function GET() {
 
   const supabase = await createClient();
 
+  const membersPromise = supabase.rpc("list_agency_members", { p_agency_id: agencyId });
+  const invitesPromise = supabase.rpc("list_invites", { p_agency_id: agencyId });
+  const rolePromise = supabase.rpc("get_my_role", { p_agency_id: agencyId });
+
   const [membersRes, invitesRes, roleRes] = await Promise.all([
-    supabase.rpc("list_agency_members", { p_agency_id: agencyId }),
-    supabase.rpc("list_invites", { p_agency_id: agencyId }).then((r) => r).catch(() => ({ data: [], error: null })),
-    supabase.rpc("get_my_role", { p_agency_id: agencyId }),
+    membersPromise,
+    invitesPromise.then(
+      (r) => r,
+      () => ({ data: [] as unknown[], error: null }),
+    ),
+    rolePromise,
   ]);
 
   if (membersRes.error) {
