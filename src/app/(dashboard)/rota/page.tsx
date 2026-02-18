@@ -165,6 +165,10 @@ export default function RotaPage() {
         continue;
       }
       const primaryId = ids[0];
+      const isJointVisit =
+        !!v.is_joint ||
+        (Array.isArray(v.carer_ids) && v.carer_ids.length >= 2) ||
+        ((v.assignments?.length ?? 0) >= 2);
       const primaryAssignment = v.assignments?.find((a) => a.role === "primary");
       const secondaryAssignment = v.assignments?.find((a) => a.role === "secondary");
       const primaryName = primaryAssignment?.carer_name ?? v.carer_name;
@@ -173,8 +177,8 @@ export default function RotaPage() {
       for (const cid of validIds) {
         if (!byCarerDay[cid]) byCarerDay[cid] = {};
         if (!byCarerDay[cid][dayKey]) byCarerDay[cid][dayKey] = [];
-        const otherName = v.is_joint && cid !== primaryId ? primaryName : null;
-        byCarerDay[cid][dayKey].push({ ...v, otherCarerName: otherName });
+        const otherName = isJointVisit && cid !== primaryId ? primaryName : null;
+        byCarerDay[cid][dayKey].push({ ...v, is_joint: isJointVisit, otherCarerName: otherName });
       }
     }
 
