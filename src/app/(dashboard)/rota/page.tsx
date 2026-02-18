@@ -1,0 +1,401 @@
+"use client";
+
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+
+type Carer = { id: string; name: string | null };
+type Visit = {
+  id: string;
+  client_id: string;
+  carer_id: string;
+  client_name: string | null;
+  carer_name: string | null;
+  start_time: string;
+  end_time: string;
+  status: string;
+  notes: string | null;
+};
+
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function getMondayOfWeek(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function getWeekRange(weekStart: Date): { start: Date; end: Date; days: Date[] } {
+  const start = new Date(weekStart);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  const days: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    days.push(d);
+  }
+  return { start, end, days };
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function formatDateShort(d: Date): string {
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+function getStatusBadge(status: string) {
+  switch (status) {
+    case "completed":
+      return "bg-green-100 text-green-800";
+    case "missed":
+      return "bg-red-100 text-red-800";
+    default:
+      return "bg-indigo-100 text-indigo-800";
+  }
+}
+
+export default function RotaPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const weekParam = searchParams.get("week");
+
+  const [weekStart, setWeekStart] = useState<Date>(() => {
+    if (weekParam) {
+      const d = new Date(weekParam);
+      if (!isNaN(d.getTime())) return getMondayOfWeek(d);
+    }
+    return getMondayOfWeek(new Date());
+  });
+
+  const [carers, setCarers] = useState<Carer[]>([]);
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
+
+  const { start, end, days } = useMemo(
+    () => getWeekRange(weekStart),
+    [weekStart.toISOString().slice(0, 10)]
+  );
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const weekStartISO = start.toISOString();
+      const weekEndISO = end.toISOString();
+      const res = await fetch(
+        `/api/rota?weekStart=${encodeURIComponent(weekStartISO)}&weekEnd=${encodeURIComponent(weekEndISO)}`
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Failed to load rota");
+        return;
+      }
+      setCarers(data.carers ?? []);
+      setVisits(data.visits ?? []);
+    } catch (e) {
+      setError("Failed to load rota");
+    } finally {
+      setLoading(false);
+    }
+  }, [start.toISOString(), end.toISOString()]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Sync weekStart when URL changes (e.g. browser back/forward)
+  useEffect(() => {
+    if (weekParam) {
+      const d = new Date(weekParam);
+      if (!isNaN(d.getTime())) setWeekStart(getMondayOfWeek(d));
+    }
+  }, [weekParam]);
+
+  // Group visits by carer_id and day (date string YYYY-MM-DD)
+  const grouped = useMemo(() => {
+    const byCarerDay: Record<string, Record<string, Visit[]>> = {};
+    const carerIds = new Set(carers.map((c) => c.id));
+    const unassigned: Visit[] = [];
+
+    for (const v of visits) {
+      const dayKey = v.start_time.slice(0, 10);
+      if (!carerIds.has(v.carer_id)) {
+        unassigned.push(v);
+        continue;
+      }
+      if (!byCarerDay[v.carer_id]) byCarerDay[v.carer_id] = {};
+      if (!byCarerDay[v.carer_id][dayKey])
+        byCarerDay[v.carer_id][dayKey] = [];
+      byCarerDay[v.carer_id][dayKey].push(v);
+    }
+
+    // Sort visits within each cell by start_time
+    for (const carerId of Object.keys(byCarerDay)) {
+      for (const dayKey of Object.keys(byCarerDay[carerId])) {
+        byCarerDay[carerId][dayKey].sort(
+          (a, b) =>
+            new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+        );
+      }
+    }
+
+    return { byCarerDay, unassigned };
+  }, [visits, carers]);
+
+  const goPrev = () => {
+    const prev = new Date(weekStart);
+    prev.setDate(prev.getDate() - 7);
+    setWeekStart(prev);
+    router.push(`/rota?week=${prev.toISOString().slice(0, 10)}`);
+  };
+
+  const goNext = () => {
+    const next = new Date(weekStart);
+    next.setDate(next.getDate() + 7);
+    setWeekStart(next);
+    router.push(`/rota?week=${next.toISOString().slice(0, 10)}`);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-xl font-semibold text-gray-900">Rota</h1>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={goPrev}
+            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            ← Prev week
+          </button>
+          <span className="min-w-[180px] text-center text-sm font-medium text-gray-700">
+            {formatDateShort(days[0])} – {formatDateShort(days[6])}
+          </span>
+          <button
+            type="button"
+            onClick={goNext}
+            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Next week →
+          </button>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+          <button
+            type="button"
+            onClick={() => setError("")}
+            className="ml-2 text-xs font-medium underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      {loading ? (
+        <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+          <p className="mt-3 text-sm text-gray-500">Loading rota...</p>
+        </div>
+      ) : (
+        <>
+          {/* Unassigned section */}
+          {grouped.unassigned.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <h2 className="mb-3 text-sm font-semibold text-amber-900">
+                Unassigned visits
+              </h2>
+              <ul className="space-y-2">
+                {grouped.unassigned.map((v) => (
+                  <li
+                    key={v.id}
+                    className="flex items-center gap-3 rounded-md bg-white px-3 py-2 text-sm"
+                  >
+                    <span className="font-medium text-gray-900">
+                      {v.client_name ?? "Unknown"}
+                    </span>
+                    <span className="text-gray-500">
+                      {formatTime(v.start_time)}–{formatTime(v.end_time)}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadge(v.status)}`}
+                    >
+                      {v.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Main grid */}
+          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+            <table className="min-w-[700px] border-collapse">
+              <thead>
+                <tr className="sticky top-0 z-20 border-b border-gray-200 bg-gray-50">
+                  <th className="sticky left-0 z-30 min-w-[140px] border-r border-gray-200 bg-gray-50 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                    Carer
+                  </th>
+                  {days.map((d) => (
+                    <th
+                      key={d.toISOString()}
+                      className="min-w-[100px] px-2 py-3 text-center text-xs font-semibold text-gray-600"
+                    >
+                      <div>{DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1]}</div>
+                      <div className="mt-0.5 font-normal">
+                        {formatDateShort(d)}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {carers.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="px-4 py-12 text-center text-sm text-gray-500"
+                    >
+                      No carers yet. Add carers to see the rota.
+                    </td>
+                  </tr>
+                ) : (
+                  carers.map((carer) => (
+                    <tr key={carer.id} className="group">
+                      <td className="sticky left-0 z-10 min-w-[140px] border-r border-gray-100 bg-white px-3 py-2 text-sm font-medium text-gray-900 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.05)] group-hover:bg-gray-50">
+                        {carer.name ?? "—"}
+                      </td>
+                      {days.map((d) => {
+                        const dayKey = d.toISOString().slice(0, 10);
+                        const cellVisits =
+                          grouped.byCarerDay[carer.id]?.[dayKey] ?? [];
+                        return (
+                          <td
+                            key={dayKey}
+                            className="min-w-[100px] align-top border-l border-gray-100 px-2 py-2"
+                          >
+                            {cellVisits.length === 0 ? (
+                              <span className="text-xs text-gray-400">—</span>
+                            ) : (
+                              <div className="space-y-2">
+                                {cellVisits.map((v) => (
+                                  <button
+                                    key={v.id}
+                                    type="button"
+                                    onClick={() => setSelectedVisit(v)}
+                                    className="block w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-left text-xs transition hover:border-indigo-300 hover:bg-indigo-50"
+                                  >
+                                    <div className="font-medium text-gray-900">
+                                      {formatTime(v.start_time)}–
+                                      {formatTime(v.end_time)}
+                                    </div>
+                                    <div className="text-gray-600">
+                                      {v.client_name ?? "Unknown"}
+                                    </div>
+                                    <span
+                                      className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${getStatusBadge(v.status)}`}
+                                    >
+                                      {v.status}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* Visit detail modal */}
+      {selectedVisit && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setSelectedVisit(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-gray-900">
+              Visit details
+            </h2>
+            <dl className="mt-4 space-y-2 text-sm">
+              <div>
+                <dt className="font-medium text-gray-500">Client</dt>
+                <dd className="text-gray-900">{selectedVisit.client_name ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-gray-500">Carer</dt>
+                <dd className="text-gray-900">{selectedVisit.carer_name ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-gray-500">Time</dt>
+                <dd className="text-gray-900">
+                  {formatTime(selectedVisit.start_time)} – {formatTime(selectedVisit.end_time)}
+                  {" · "}
+                  {new Date(selectedVisit.start_time).toLocaleDateString(undefined, {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                  })}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-gray-500">Status</dt>
+                <dd>
+                  <span
+                    className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadge(selectedVisit.status)}`}
+                  >
+                    {selectedVisit.status}
+                  </span>
+                </dd>
+              </div>
+              {selectedVisit.notes && (
+                <div>
+                  <dt className="font-medium text-gray-500">Notes</dt>
+                  <dd className="text-gray-900">{selectedVisit.notes}</dd>
+                </div>
+              )}
+            </dl>
+            <div className="mt-6 flex gap-3">
+              <a
+                href="/visits"
+                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+              >
+                Edit in Visits
+              </a>
+              <button
+                type="button"
+                onClick={() => setSelectedVisit(null)}
+                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -36,6 +36,12 @@ export function DashboardNav() {
       >
         Visits
       </Link>
+      <Link
+        href="/rota"
+        className={`${link} ${pathname.startsWith("/rota") ? activeLink : inactiveLink}`}
+      >
+        Rota
+      </Link>
     </nav>
   );
 }
