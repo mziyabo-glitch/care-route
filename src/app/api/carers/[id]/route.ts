@@ -28,6 +28,7 @@ export async function PATCH(
       );
     }
     updates.name = name;
+    updates.full_name = name;
   }
   if (body.email !== undefined) {
     const email = (body.email as string)?.trim() || null;
@@ -55,7 +56,7 @@ export async function PATCH(
     .update(updates)
     .eq("id", id)
     .eq("agency_id", agencyId)
-    .select("id, name, email, phone, role, active")
+    .select("id, name, full_name, email, phone, role, active")
     .single();
 
   if (error) {
@@ -65,7 +66,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json(data);
+  const d = data as { full_name?: string; name?: string } & Record<string, unknown>;
+  return NextResponse.json({
+    ...d,
+    name: d.full_name ?? d.name ?? null,
+  });
 }
 
 export async function DELETE(

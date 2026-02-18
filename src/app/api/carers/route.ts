@@ -13,9 +13,9 @@ export async function GET() {
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const { data: raw, error } = await supabase
     .from("carers")
-    .select("id, name, email, phone, role, active")
+    .select("id, name, full_name, email, phone, role, active")
     .eq("agency_id", agencyId)
     .order("name");
 
@@ -23,6 +23,10 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const data = (raw ?? []).map((c) => {
+    const d = c as { full_name?: string; name?: string } & Record<string, unknown>;
+    return { ...d, name: d.full_name ?? d.name ?? null };
+  });
   return NextResponse.json(data);
 }
 

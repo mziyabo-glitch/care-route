@@ -34,11 +34,16 @@ export default async function VisitsPage() {
         .order("name"),
       supabase
         .from("carers")
-        .select("id, name")
+        .select("id, name, full_name")
         .eq("agency_id", agencyId)
         .eq("active", true)
         .order("name"),
     ]);
+
+  const carersWithName = (carers ?? []).map((c) => ({
+    ...c,
+    name: (c as { full_name?: string; name?: string }).full_name ?? (c as { full_name?: string; name?: string }).name ?? null,
+  }));
 
   return (
     <div className="space-y-6">
@@ -49,7 +54,7 @@ export default async function VisitsPage() {
         agencyId={agencyId}
         visits={visits ?? []}
         clients={clients ?? []}
-        carers={carers ?? []}
+        carers={carersWithName}
       />
     </div>
   );
