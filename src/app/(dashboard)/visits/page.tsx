@@ -36,6 +36,7 @@ export default async function VisitsPage() {
         .from("carers")
         .select("id, name")
         .eq("agency_id", agencyId)
+        .eq("active", true)
         .order("name"),
     ]);
 
