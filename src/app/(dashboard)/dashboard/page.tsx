@@ -23,10 +23,12 @@ export default async function DashboardPage() {
     { data: clientsCount },
     { data: carersCount },
     { data: visitsCount },
+    { data: visitsTodayCount },
   ] = await Promise.all([
     supabase.rpc("count_clients", { p_agency_id: agencyId }),
     supabase.rpc("count_carers", { p_agency_id: agencyId }),
     supabase.rpc("count_visits", { p_agency_id: agencyId }),
+    supabase.rpc("count_visits_today", { p_agency_id: agencyId }),
   ]);
 
   return (
@@ -59,6 +61,9 @@ export default async function DashboardPage() {
         >
           <h2 className="text-sm font-medium text-gray-500">Visits</h2>
           <p className="mt-2 text-3xl font-semibold text-gray-900">{visitsCount ?? 0}</p>
+          <p className="mt-1 text-xs text-gray-500">
+            {visitsTodayCount ?? 0} today
+          </p>
         </Link>
       </div>
     </div>
