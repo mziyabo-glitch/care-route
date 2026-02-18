@@ -214,7 +214,37 @@ export default function RotaPage() {
       }
     }
 
-    return { byCarerDay, unassigned, conflictIds, travelTightByVisit };
+    type CarerWeekStats = {
+      visitCount: number;
+      careMinutes: number;
+      firstTime: string | null;
+      lastTime: string | null;
+      travelWarnings: number;
+      missingDoubleUp: number;
+    };
+    const carerStats: Record<string, CarerWeekStats> = {};
+    for (const carerId of Object.keys(byCarerDay)) {
+      const stats: CarerWeekStats = {
+        visitCount: 0, careMinutes: 0,
+        firstTime: null, lastTime: null,
+        travelWarnings: 0, missingDoubleUp: 0,
+      };
+      for (const dayKey of Object.keys(byCarerDay[carerId])) {
+        for (const v of byCarerDay[carerId][dayKey]) {
+          stats.visitCount++;
+          const ms = new Date(v.end_time).getTime() - new Date(v.start_time).getTime();
+          stats.careMinutes += Math.round(ms / 60000);
+          if (!stats.firstTime || v.start_time < stats.firstTime) stats.firstTime = v.start_time;
+          if (!stats.lastTime || v.end_time > stats.lastTime) stats.lastTime = v.end_time;
+          if (travelTightByVisit[v.id]) stats.travelWarnings++;
+          const isJ = !!v.is_joint;
+          if (!!v.missing_second_carer || (!!v.requires_double_up && !isJ)) stats.missingDoubleUp++;
+        }
+      }
+      carerStats[carerId] = stats;
+    }
+
+    return { byCarerDay, unassigned, conflictIds, travelTightByVisit, carerStats };
   }, [visits, carers]);
 
   const goPrev = () => {
@@ -337,10 +367,49 @@ export default function RotaPage() {
                     </td>
                   </tr>
                 ) : (
-                  carers.map((carer) => (
+                  carers.map((carer) => {
+                    const stats = grouped.carerStats[carer.id];
+                    const hasVisits = stats && stats.visitCount > 0;
+                    const hours = hasVisits ? Math.floor(stats.careMinutes / 60) : 0;
+                    const mins = hasVisits ? stats.careMinutes % 60 : 0;
+                    const careLabel = hours > 0
+                      ? `${hours}h${mins > 0 ? ` ${mins}m` : ""}`
+                      : `${mins}m`;
+                    return (
                     <tr key={carer.id} className="group">
-                      <td className="sticky left-0 z-10 min-w-[140px] border-r border-gray-100 bg-white px-3 py-2 text-sm font-medium text-gray-900 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.05)] group-hover:bg-gray-50">
-                        {carer.name ?? "—"}
+                      <td className="sticky left-0 z-10 min-w-[180px] border-r border-gray-100 bg-white px-3 py-2 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.05)] group-hover:bg-gray-50">
+                        <div className="text-sm font-medium text-gray-900">{carer.name ?? "—"}</div>
+                        {hasVisits ? (
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] leading-tight">
+                            <span className="font-medium text-gray-600">
+                              {stats.visitCount} visit{stats.visitCount !== 1 ? "s" : ""}
+                            </span>
+                            <span className="text-gray-300">·</span>
+                            <span className="font-medium text-gray-600">{careLabel} care</span>
+                            {stats.travelWarnings > 0 && (
+                              <>
+                                <span className="text-gray-300">·</span>
+                                <span className="font-semibold text-amber-600">
+                                  {stats.travelWarnings} travel {stats.travelWarnings === 1 ? "warning" : "warnings"}
+                                </span>
+                              </>
+                            )}
+                            {stats.missingDoubleUp > 0 && (
+                              <>
+                                <span className="text-gray-300">·</span>
+                                <span className="font-semibold text-red-600">
+                                  {stats.missingDoubleUp} missing 2nd
+                                </span>
+                              </>
+                            )}
+                            <span className="text-gray-300">·</span>
+                            <span className="text-gray-500">
+                              {formatTime(stats.firstTime!)}–{formatTime(stats.lastTime!)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="mt-0.5 text-[10px] text-gray-400">No visits</div>
+                        )}
                       </td>
                       {days.map((d) => {
                         const dayKey = d.toISOString().slice(0, 10);
@@ -434,7 +503,8 @@ export default function RotaPage() {
                         );
                       })}
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
