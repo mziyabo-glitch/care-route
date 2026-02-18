@@ -17,15 +17,16 @@ export async function PATCH(
   const body = await request.json();
   const status = (body.status as string)?.trim();
   const clientId = (body.client_id as string)?.trim();
-  const carerId = (body.carer_id as string)?.trim();
+  const primaryCarerId = (body.carer_id as string)?.trim() || (body.primary_carer_id as string)?.trim();
+  const secondaryCarerId = (body.secondary_carer_id as string)?.trim() || null;
   const startTime = (body.start_time as string)?.trim();
   const endTime = (body.end_time as string)?.trim();
   const notes = (body.notes as string)?.trim();
 
   const supabase = await createClient();
 
-  // Full update (edit visit): client_id, carer_id, start_time, end_time required
-  if (clientId && carerId && startTime && endTime) {
+  // Full update (edit visit): client_id, primary carer, start_time, end_time required
+  if (clientId && primaryCarerId && startTime && endTime) {
     const reqStatus = (body.status as string)?.trim() || undefined;
     if (reqStatus && !STATUSES.includes(reqStatus as (typeof STATUSES)[number])) {
       return NextResponse.json(
@@ -47,10 +48,17 @@ export async function PATCH(
         { status: 400 }
       );
     }
+    if (secondaryCarerId && secondaryCarerId === primaryCarerId) {
+      return NextResponse.json(
+        { error: "Secondary carer must be different from primary" },
+        { status: 400 }
+      );
+    }
     const { error } = await supabase.rpc("update_visit", {
       p_visit_id: id,
       p_client_id: clientId,
-      p_carer_id: carerId,
+      p_primary_carer_id: primaryCarerId,
+      p_secondary_carer_id: secondaryCarerId || null,
       p_start_time: startTime,
       p_end_time: endTime,
       p_status: reqStatus || null,

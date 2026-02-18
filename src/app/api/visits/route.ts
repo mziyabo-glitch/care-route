@@ -12,15 +12,22 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const clientId = (body.client_id as string)?.trim();
-  const carerId = (body.carer_id as string)?.trim();
+  const primaryCarerId = (body.carer_id as string)?.trim() || (body.primary_carer_id as string)?.trim();
+  const secondaryCarerId = (body.secondary_carer_id as string)?.trim() || null;
   const startTime = (body.start_time as string)?.trim();
   const endTime = (body.end_time as string)?.trim();
   const status = (body.status as string)?.trim() || "scheduled";
   const notes = (body.notes as string)?.trim() || null;
 
-  if (!clientId || !carerId || !startTime || !endTime) {
+  if (!clientId || !primaryCarerId || !startTime || !endTime) {
     return NextResponse.json(
-      { error: "Client, carer, start time, and end time are required" },
+      { error: "Client, primary carer, start time, and end time are required" },
+      { status: 400 }
+    );
+  }
+  if (secondaryCarerId && secondaryCarerId === primaryCarerId) {
+    return NextResponse.json(
+      { error: "Secondary carer must be different from primary" },
       { status: 400 }
     );
   }
@@ -51,7 +58,8 @@ export async function POST(request: Request) {
   const { data, error } = await supabase.rpc("insert_visit", {
     p_agency_id: agencyId,
     p_client_id: clientId,
-    p_carer_id: carerId,
+    p_primary_carer_id: primaryCarerId,
+    p_secondary_carer_id: secondaryCarerId || null,
     p_start_time: startTime,
     p_end_time: endTime,
     p_status: status,

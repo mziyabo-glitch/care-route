@@ -4,16 +4,27 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Carer = { id: string; name: string | null };
+type Assignment = { carer_id: string; carer_name: string | null; role: string };
 type Visit = {
   id: string;
   client_id: string;
   carer_id: string;
+  carer_ids?: string[];
+  assignments?: Assignment[];
+  is_joint?: boolean;
   client_name: string | null;
   carer_name: string | null;
+  client_postcode?: string | null;
   start_time: string;
   end_time: string;
   status: string;
   notes: string | null;
+};
+
+type VisitWithContext = Visit & {
+  /** When showing in secondary carer's row */
+  otherCarerName?: string | null;
+  travelTight?: { gap: number; need: number };
 };
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -64,6 +75,18 @@ function getStatusBadge(status: string) {
   }
 }
 
+/** Estimate travel minutes between two UK postcodes (outward code heuristic, no external API) */
+function estimateTravelMinutes(postcodeA: string | null | undefined, postcodeB: string | null | undefined): number {
+  const a = (postcodeA ?? "").toUpperCase().trim();
+  const b = (postcodeB ?? "").toUpperCase().trim();
+  if (!a || !b) return 15;
+  const outwardA = a.split(/\s/)[0] ?? "";
+  const outwardB = b.split(/\s/)[0] ?? "";
+  if (outwardA === outwardB) return 10;
+  if (outwardA.slice(0, 2) === outwardB.slice(0, 2)) return 18;
+  return 25;
+}
+
 export default function RotaPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -81,7 +104,7 @@ export default function RotaPage() {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
+  const [selectedVisit, setSelectedVisit] = useState<VisitWithContext | null>(null);
 
   const { start, end, days } = useMemo(
     () => getWeekRange(weekStart),
@@ -123,26 +146,39 @@ export default function RotaPage() {
     }
   }, [weekParam]);
 
-  // Group visits by carer_id and day, sort by start_time, detect overlapping adjacent visits
+  // Group visits by carer (from assignments/carer_ids), put joint visits in BOTH carers' rows
   const grouped = useMemo(() => {
-    const byCarerDay: Record<string, Record<string, Visit[]>> = {};
+    const byCarerDay: Record<string, Record<string, VisitWithContext[]>> = {};
     const carerIds = new Set(carers.map((c) => c.id));
     const unassigned: Visit[] = [];
     const conflictIds = new Set<string>();
+    const travelTightByVisit: Record<string, { gap: number; need: number }> = {};
 
     for (const v of visits) {
       const dayKey = v.start_time.slice(0, 10);
-      if (!carerIds.has(v.carer_id)) {
+      const ids = Array.isArray(v.carer_ids) && v.carer_ids.length > 0
+        ? v.carer_ids
+        : v.carer_id ? [v.carer_id] : [];
+      const validIds = ids.filter((id) => carerIds.has(id));
+      if (validIds.length === 0) {
         unassigned.push(v);
         continue;
       }
-      if (!byCarerDay[v.carer_id]) byCarerDay[v.carer_id] = {};
-      if (!byCarerDay[v.carer_id][dayKey])
-        byCarerDay[v.carer_id][dayKey] = [];
-      byCarerDay[v.carer_id][dayKey].push(v);
+      const primaryId = ids[0];
+      const primaryAssignment = v.assignments?.find((a) => a.role === "primary");
+      const secondaryAssignment = v.assignments?.find((a) => a.role === "secondary");
+      const primaryName = primaryAssignment?.carer_name ?? v.carer_name;
+      const secondaryName = secondaryAssignment?.carer_name;
+
+      for (const cid of validIds) {
+        if (!byCarerDay[cid]) byCarerDay[cid] = {};
+        if (!byCarerDay[cid][dayKey]) byCarerDay[cid][dayKey] = [];
+        const otherName = v.is_joint && cid !== primaryId ? primaryName : null;
+        byCarerDay[cid][dayKey].push({ ...v, otherCarerName: otherName });
+      }
     }
 
-    // Sort visits within each cell by start_time
+    // Sort, overlap check, travel gap per carer/day
     for (const carerId of Object.keys(byCarerDay)) {
       for (const dayKey of Object.keys(byCarerDay[carerId])) {
         const cellVisits = byCarerDay[carerId][dayKey];
@@ -150,19 +186,26 @@ export default function RotaPage() {
           (a, b) =>
             new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
         );
-        // Check adjacent visits for overlap: current.start_time < previous.end_time
         for (let i = 1; i < cellVisits.length; i++) {
           const prev = cellVisits[i - 1];
           const curr = cellVisits[i];
+          // Overlap
           if (new Date(curr.start_time).getTime() < new Date(prev.end_time).getTime()) {
             conflictIds.add(prev.id);
             conflictIds.add(curr.id);
+          }
+          // Travel gap: gap < need + 5 buffer => tight
+          const gapMs = new Date(curr.start_time).getTime() - new Date(prev.end_time).getTime();
+          const gap = Math.round(gapMs / 60000);
+          const need = estimateTravelMinutes(prev.client_postcode, curr.client_postcode) + 5;
+          if (gap < need && gap >= 0) {
+            travelTightByVisit[curr.id] = { gap, need };
           }
         }
       }
     }
 
-    return { byCarerDay, unassigned, conflictIds };
+    return { byCarerDay, unassigned, conflictIds, travelTightByVisit };
   }, [visits, carers]);
 
   const goPrev = () => {
@@ -305,9 +348,11 @@ export default function RotaPage() {
                               <div className="space-y-2">
                                 {cellVisits.map((v) => {
                                   const hasConflict = grouped.conflictIds.has(v.id);
+                                  const travel = grouped.travelTightByVisit[v.id];
+                                  const travelRatio = travel ? travel.gap / travel.need : 1;
                                   return (
                                     <button
-                                      key={v.id}
+                                      key={`${v.id}-${carer.id}`}
                                       type="button"
                                       onClick={() => setSelectedVisit(v)}
                                       className={`block w-full rounded-md border px-2 py-1.5 text-left text-xs transition ${
@@ -328,11 +373,33 @@ export default function RotaPage() {
                                       <div className="text-gray-600">
                                         {v.client_name ?? "Unknown"}
                                       </div>
-                                      <span
-                                        className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${getStatusBadge(v.status)}`}
-                                      >
-                                        {v.status}
-                                      </span>
+                                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                                        <span
+                                          className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${getStatusBadge(v.status)}`}
+                                        >
+                                          {v.status}
+                                        </span>
+                                        {v.is_joint && (
+                                          <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-800">
+                                            👥 Joint
+                                          </span>
+                                        )}
+                                        {travel && (
+                                          <span
+                                            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                              travelRatio < 0.5 ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"
+                                            }`}
+                                            title={`(gap ${travel.gap}m, need ~${travel.need}m)`}
+                                          >
+                                            ⚠ Tight travel
+                                          </span>
+                                        )}
+                                      </div>
+                                      {v.otherCarerName && (
+                                        <div className="mt-0.5 text-[10px] text-gray-500">
+                                          With: {v.otherCarerName}
+                                        </div>
+                                      )}
                                     </button>
                                   );
                                 })}
@@ -369,8 +436,12 @@ export default function RotaPage() {
                 <dd className="text-gray-900">{selectedVisit.client_name ?? "—"}</dd>
               </div>
               <div>
-                <dt className="font-medium text-gray-500">Carer</dt>
-                <dd className="text-gray-900">{selectedVisit.carer_name ?? "—"}</dd>
+                <dt className="font-medium text-gray-500">Carer(s)</dt>
+                <dd className="text-gray-900">
+                  {selectedVisit.assignments?.length
+                    ? selectedVisit.assignments.map((a) => a.carer_name ?? "—").join(", ")
+                    : selectedVisit.carer_name ?? "—"}
+                </dd>
               </div>
               <div>
                 <dt className="font-medium text-gray-500">Time</dt>
@@ -386,12 +457,17 @@ export default function RotaPage() {
               </div>
               <div>
                 <dt className="font-medium text-gray-500">Status</dt>
-                <dd>
+                <dd className="flex flex-wrap items-center gap-1">
                   <span
                     className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadge(selectedVisit.status)}`}
                   >
                     {selectedVisit.status}
                   </span>
+                  {selectedVisit.is_joint && (
+                    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">
+                      👥 Joint visit
+                    </span>
+                  )}
                 </dd>
               </div>
               {selectedVisit.notes && (

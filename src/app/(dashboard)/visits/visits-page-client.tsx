@@ -3,10 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+type Assignment = { carer_id: string; carer_name: string | null; role: string };
 type Visit = {
   id: string;
   client_id: string;
   carer_id: string;
+  carer_ids?: string[];
+  assignments?: Assignment[];
+  is_joint?: boolean;
   client_name: string | null;
   carer_name: string | null;
   start_time: string;
@@ -41,6 +45,8 @@ export function VisitsPageClient({
   const [deleteVisit, setDeleteVisit] = useState<Visit | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [createJoint, setCreateJoint] = useState(false);
+  const [editJoint, setEditJoint] = useState(false);
 
   function toLocalDatetimeLocal(iso: string): string {
     const d = new Date(iso);
@@ -79,9 +85,17 @@ export function VisitsPageClient({
     setSubmitting(true);
     const form = e.currentTarget;
     const fd = new FormData(form);
+    const joint = fd.get("joint_visit") === "on";
+    const secondary = (fd.get("secondary_carer_id") as string)?.trim();
+    if (joint && (!secondary || secondary === fd.get("primary_carer_id"))) {
+      setError(!secondary ? "Please select a second carer for joint visit" : "Secondary carer must be different from primary");
+      setSubmitting(false);
+      return;
+    }
     const body = {
       client_id: fd.get("client_id"),
-      carer_id: fd.get("carer_id"),
+      primary_carer_id: fd.get("primary_carer_id"),
+      secondary_carer_id: joint ? secondary : null,
       start_time: fd.get("start_time"),
       end_time: fd.get("end_time"),
       status: (fd.get("status") as string) || "scheduled",
@@ -133,9 +147,17 @@ export function VisitsPageClient({
     setSubmitting(true);
     const form = e.currentTarget;
     const fd = new FormData(form);
+    const joint = fd.get("joint_visit") === "on";
+    const secondary = (fd.get("secondary_carer_id") as string)?.trim();
+    if (joint && (!secondary || secondary === fd.get("primary_carer_id"))) {
+      setError(!secondary ? "Please select a second carer for joint visit" : "Secondary carer must be different from primary");
+      setSubmitting(false);
+      return;
+    }
     const body = {
       client_id: fd.get("client_id"),
-      carer_id: fd.get("carer_id"),
+      primary_carer_id: fd.get("primary_carer_id"),
+      secondary_carer_id: joint ? secondary : null,
       start_time: fd.get("start_time"),
       end_time: fd.get("end_time"),
       status: (fd.get("status") as string) || "scheduled",
@@ -218,7 +240,7 @@ export function VisitsPageClient({
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="font-medium text-gray-900">
-                      {v.client_name ?? "Unknown"} → {v.carer_name ?? "Unknown"}
+                      {v.client_name ?? "Unknown"} → {v.assignments?.map((a) => a.carer_name ?? "Unknown").join(" + ") ?? v.carer_name ?? "Unknown"}
                     </div>
                     <div className="mt-1 text-sm text-gray-500">
                       {formatDateTime(v.start_time)} – {formatDateTime(v.end_time)}
@@ -228,6 +250,11 @@ export function VisitsPageClient({
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    {v.is_joint && (
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">
+                        👥 Joint visit
+                      </span>
+                    )}
                     <select
                       value={v.status}
                       onChange={(e) => handleStatusChange(v, e.target.value)}
@@ -245,6 +272,7 @@ export function VisitsPageClient({
                       onClick={() => {
                         setError("");
                         setEditVisit(v);
+                        setEditJoint(!!v.is_joint);
                       }}
                       className="text-sm font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-60"
                       disabled={submitting}
@@ -274,7 +302,7 @@ export function VisitsPageClient({
       {showCreateModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={() => setShowCreateModal(false)}
+          onClick={() => { setShowCreateModal(false); setCreateJoint(false); }}
         >
           <div
             className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-lg"
@@ -301,10 +329,10 @@ export function VisitsPageClient({
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Carer *
+                  Primary carer *
                 </label>
                 <select
-                  name="carer_id"
+                  name="primary_carer_id"
                   required
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
                 >
@@ -316,6 +344,37 @@ export function VisitsPageClient({
                   ))}
                 </select>
               </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="create-joint"
+                  name="joint_visit"
+                  checked={createJoint}
+                  onChange={(e) => setCreateJoint(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <label htmlFor="create-joint" className="text-sm font-medium text-gray-700">
+                  Joint visit (2 carers)
+                </label>
+              </div>
+              {createJoint && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Second carer *
+                </label>
+                <select
+                  name="secondary_carer_id"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+                >
+                  <option value="">Select second carer</option>
+                  {carers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name ?? "Unnamed"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              )}
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
                   Start *
@@ -397,7 +456,7 @@ export function VisitsPageClient({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => { setShowCreateModal(false); setCreateJoint(false); }}
                   className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Cancel
@@ -442,12 +501,12 @@ export function VisitsPageClient({
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Carer *
+                  Primary carer *
                 </label>
                 <select
-                  name="carer_id"
+                  name="primary_carer_id"
                   required
-                  defaultValue={editVisit.carer_id}
+                  defaultValue={editVisit.carer_ids?.[0] ?? editVisit.carer_id}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
                 >
                   {carers.map((c) => (
@@ -457,6 +516,38 @@ export function VisitsPageClient({
                   ))}
                 </select>
               </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="edit-joint"
+                  name="joint_visit"
+                  checked={editJoint}
+                  onChange={(e) => setEditJoint(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <label htmlFor="edit-joint" className="text-sm font-medium text-gray-700">
+                  Joint visit (2 carers)
+                </label>
+              </div>
+              {editJoint && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Second carer *
+                </label>
+                <select
+                  name="secondary_carer_id"
+                  defaultValue={editVisit.carer_ids?.[1] ?? ""}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+                >
+                  <option value="">Select second carer</option>
+                  {carers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name ?? "Unnamed"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              )}
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
                   Start *
