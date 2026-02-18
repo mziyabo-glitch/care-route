@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 
 type Assignment = { carer_id: string; carer_name: string | null; role: string };
@@ -50,6 +50,50 @@ export function VisitsPageClient({
   const [submitting, setSubmitting] = useState(false);
   const [createJoint, setCreateJoint] = useState(false);
   const [editJoint, setEditJoint] = useState(false);
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [dateFilter, setDateFilter] = useState("");
+
+  const uniqueDates = useMemo(() => {
+    const dates = new Set(
+      initialVisits.map((v) => new Date(v.start_time).toLocaleDateString("en-CA"))
+    );
+    return Array.from(dates).sort().reverse();
+  }, [initialVisits]);
+
+  const filteredVisits = useMemo(() => {
+    let list = [...initialVisits];
+    if (dateFilter) {
+      list = list.filter(
+        (v) => new Date(v.start_time).toLocaleDateString("en-CA") === dateFilter
+      );
+    }
+    list.sort((a, b) => {
+      const diff = new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
+      return sortOrder === "newest" ? -diff : diff;
+    });
+    return list;
+  }, [initialVisits, dateFilter, sortOrder]);
+
+  const groupedByDay = useMemo(() => {
+    const groups: { date: string; label: string; visits: Visit[] }[] = [];
+    const map = new Map<string, Visit[]>();
+    for (const v of filteredVisits) {
+      const key = new Date(v.start_time).toLocaleDateString("en-CA");
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(v);
+    }
+    for (const [key, visits] of map) {
+      const d = new Date(key + "T00:00:00");
+      const label = d.toLocaleDateString(undefined, {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+      groups.push({ date: key, label, visits });
+    }
+    return groups;
+  }, [filteredVisits]);
 
   function toLocalDatetimeLocal(iso: string): string {
     const d = new Date(iso);
@@ -205,7 +249,8 @@ export function VisitsPageClient({
   return (
     <>
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 px-4 py-3">
+        {/* Toolbar: Add + Filter + Sort */}
+        <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-4 py-3">
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
@@ -214,8 +259,32 @@ export function VisitsPageClient({
           >
             Add visit
           </button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none ring-indigo-500 focus:ring-2"
+            >
+              <option value="">All dates</option>
+              {uniqueDates.map((d) => {
+                const dt = new Date(d + "T00:00:00");
+                return (
+                  <option key={d} value={d}>
+                    {dt.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}
+                  </option>
+                );
+              })}
+            </select>
+            <button
+              type="button"
+              onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            >
+              {sortOrder === "newest" ? "↓ Newest" : "↑ Oldest"}
+            </button>
+          </div>
           {(clients.length === 0 || carers.length === 0) && (
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="w-full text-sm text-gray-500">
               Add at least one client and one carer first.
             </p>
           )}
@@ -232,100 +301,114 @@ export function VisitsPageClient({
             </button>
           </div>
         ) : null}
-        <ul className="divide-y divide-gray-200">
-          {initialVisits.length === 0 ? (
-            <li className="px-4 py-8 text-center text-sm text-gray-500">
-              No visits yet. Schedule your first visit.
-            </li>
-          ) : (
-            initialVisits.map((v) => {
-              const isJoint = !!v.is_joint || (Array.isArray(v.carer_ids) && v.carer_ids.length >= 2) || ((v.assignments?.length ?? 0) >= 2);
-              const missingSecond = !!v.missing_second_carer || (!!v.requires_double_up && !isJoint);
-              const leftBorder = missingSecond
-                ? "border-l-4 border-l-red-500 bg-red-50/40"
-                : isJoint
-                  ? "border-l-4 border-l-violet-500 bg-violet-50/50"
-                  : "";
-              return (
-              <li key={v.id} className={`px-4 py-4 ${leftBorder}`}>
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    {missingSecond && (
-                      <div className="mb-1 inline-flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                        <span>❗</span> Missing 2nd carer
-                      </div>
-                    )}
-                    {isJoint && !missingSecond && (
-                      <div className="mb-1 inline-flex items-center gap-1 rounded bg-violet-700 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                        <span>👥</span> Joint visit
-                      </div>
-                    )}
-                    <div className="font-medium text-gray-900">
-                      {v.client_name ?? "Unknown"} → {v.assignments?.map((a) => a.carer_name ?? "Unknown").join(" + ") ?? v.carer_name ?? "Unknown"}
-                    </div>
-                    <div className="mt-1 text-sm text-gray-500">
-                      {formatDateTime(v.start_time)} – {formatDateTime(v.end_time)}
-                    </div>
-                    {v.notes && (
-                      <div className="mt-1 text-sm text-gray-600">{v.notes}</div>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {missingSecond && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setError("");
-                          setEditVisit(v);
-                          setEditJoint(true);
-                        }}
-                        className="rounded-md bg-red-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-red-500"
-                      >
-                        + Assign 2nd
-                      </button>
-                    )}
-                    <select
-                      value={v.status}
-                      onChange={(e) => handleStatusChange(v, e.target.value)}
-                      disabled={submitting}
-                      className={`rounded-full px-2 py-1 text-xs font-medium outline-none ring-indigo-500 focus:ring-2 disabled:opacity-60 ${getStatusBadgeClass(v.status)}`}
-                    >
-                      {STATUS_OPTIONS.map((s) => (
-                        <option key={s.value} value={s.value}>
-                          {s.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setError("");
-                        setEditVisit(v);
-                        setEditJoint(!!v.is_joint);
-                      }}
-                      className="text-sm font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-60"
-                      disabled={submitting}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setError("");
-                        setDeleteVisit(v);
-                      }}
-                      className="text-sm font-medium text-red-600 hover:text-red-500 disabled:opacity-60"
-                      disabled={submitting}
-                    >
-                      Delete
-                    </button>
-                  </div>
+        {filteredVisits.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-gray-500">
+            {initialVisits.length === 0
+              ? "No visits yet. Schedule your first visit."
+              : "No visits match the selected date."}
+          </div>
+        ) : (
+          <div>
+            {groupedByDay.map((group) => (
+              <div key={group.date}>
+                <div className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 px-4 py-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    {group.label}
+                    <span className="ml-2 text-gray-400">({group.visits.length})</span>
+                  </h3>
                 </div>
-              </li>
-              );
-            })
-          )}
-        </ul>
+                <ul className="divide-y divide-gray-200">
+                  {group.visits.map((v) => {
+                    const isJoint = !!v.is_joint || (Array.isArray(v.carer_ids) && v.carer_ids.length >= 2) || ((v.assignments?.length ?? 0) >= 2);
+                    const missingSecond = !!v.missing_second_carer || (!!v.requires_double_up && !isJoint);
+                    const leftBorder = missingSecond
+                      ? "border-l-4 border-l-red-500 bg-red-50/40"
+                      : isJoint
+                        ? "border-l-4 border-l-violet-500 bg-violet-50/50"
+                        : "";
+                    return (
+                    <li key={v.id} className={`px-4 py-4 ${leftBorder}`}>
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          {missingSecond && (
+                            <div className="mb-1 inline-flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                              <span>❗</span> Missing 2nd carer
+                            </div>
+                          )}
+                          {isJoint && !missingSecond && (
+                            <div className="mb-1 inline-flex items-center gap-1 rounded bg-violet-700 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                              <span>👥</span> Joint visit
+                            </div>
+                          )}
+                          <div className="font-medium text-gray-900">
+                            {v.client_name ?? "Unknown"} → {v.assignments?.map((a) => a.carer_name ?? "Unknown").join(" + ") ?? v.carer_name ?? "Unknown"}
+                          </div>
+                          <div className="mt-1 text-sm text-gray-500">
+                            {formatDateTime(v.start_time)} – {formatDateTime(v.end_time)}
+                          </div>
+                          {v.notes && (
+                            <div className="mt-1 text-sm text-gray-600">{v.notes}</div>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {missingSecond && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setError("");
+                                setEditVisit(v);
+                                setEditJoint(true);
+                              }}
+                              className="rounded-md bg-red-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-red-500"
+                            >
+                              + Assign 2nd
+                            </button>
+                          )}
+                          <select
+                            value={v.status}
+                            onChange={(e) => handleStatusChange(v, e.target.value)}
+                            disabled={submitting}
+                            className={`rounded-full px-2 py-1 text-xs font-medium outline-none ring-indigo-500 focus:ring-2 disabled:opacity-60 ${getStatusBadgeClass(v.status)}`}
+                          >
+                            {STATUS_OPTIONS.map((s) => (
+                              <option key={s.value} value={s.value}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setError("");
+                              setEditVisit(v);
+                              setEditJoint(!!v.is_joint);
+                            }}
+                            className="text-sm font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-60"
+                            disabled={submitting}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setError("");
+                              setDeleteVisit(v);
+                            }}
+                            className="text-sm font-medium text-red-600 hover:text-red-500 disabled:opacity-60"
+                            disabled={submitting}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Create modal */}
