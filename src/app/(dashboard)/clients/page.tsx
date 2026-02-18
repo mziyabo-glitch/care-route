@@ -8,23 +8,20 @@ export default async function ClientsPage() {
 
   const supabase = await createClient();
 
-  // Use select("*") to avoid PostgREST schema-cache column resolution issues.
-  const { data: raw, error: fetchError } = await supabase
-    .from("clients")
-    .select("*")
-    .eq("agency_id", agencyId)
-    .order("created_at", { ascending: false });
+  const { data: raw, error: fetchError } = await supabase.rpc(
+    "list_clients",
+    { p_agency_id: agencyId }
+  );
 
-  const clients = (raw ?? []).map((c) => {
-    const row = c as Record<string, unknown>;
-    return {
-      id: row.id as string,
-      name: ((row.full_name ?? row.name) as string | null) ?? null,
-      address: (row.address as string | null) ?? null,
-      postcode: (row.postcode as string | null) ?? null,
-      notes: (row.notes as string | null) ?? null,
-    };
-  });
+  type ClientRow = {
+    id: string;
+    name: string | null;
+    address: string | null;
+    postcode: string | null;
+    notes: string | null;
+  };
+
+  const clients: ClientRow[] = Array.isArray(raw) ? raw : [];
 
   return (
     <div className="space-y-6">
