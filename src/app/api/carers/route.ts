@@ -54,22 +54,18 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("carers")
-    .insert({
-      agency_id: agencyId,
-      name,
-      email,
-      phone,
-      role,
-      active,
-    })
-    .select("id, name, email, phone, role, active")
-    .single();
+  const { data, error } = await supabase.rpc("insert_carer", {
+    p_agency_id: agencyId,
+    p_name: name,
+    p_email: email,
+    p_phone: phone,
+    p_role: role,
+    p_active: active,
+  });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json(data as Record<string, unknown>);
 }
