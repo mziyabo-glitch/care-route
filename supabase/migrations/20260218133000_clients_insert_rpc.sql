@@ -1,10 +1,15 @@
 -- Insert client via SECURITY DEFINER to avoid RLS recursion/stack depth issues.
 -- Also ensures expected columns exist for compatibility.
 
+-- Support both name and full_name (production may use either).
+alter table public.clients add column if not exists full_name text;
 alter table public.clients add column if not exists name text;
 alter table public.clients add column if not exists address text;
 alter table public.clients add column if not exists postcode text;
 alter table public.clients add column if not exists notes text;
+
+update public.clients set full_name = name where full_name is null and name is not null;
+update public.clients set name = full_name where name is null and full_name is not null;
 
 create or replace function public.insert_client(
   p_agency_id uuid,
@@ -39,9 +44,10 @@ begin
     raise exception 'Not authorized for this agency';
   end if;
 
-  insert into public.clients (agency_id, name, address, postcode, notes)
+  insert into public.clients (agency_id, full_name, name, address, postcode, notes)
   values (
     p_agency_id,
+    trim(p_name),
     trim(p_name),
     nullif(trim(coalesce(p_address, '')), ''),
     nullif(trim(coalesce(p_postcode, '')), ''),
@@ -51,7 +57,7 @@ begin
 
   select jsonb_build_object(
     'id', c.id,
-    'name', c.name,
+    'name', coalesce(c.full_name, c.name),
     'address', c.address,
     'postcode', c.postcode,
     'notes', c.notes

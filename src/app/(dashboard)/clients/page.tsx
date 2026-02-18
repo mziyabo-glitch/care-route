@@ -8,11 +8,19 @@ export default async function ClientsPage() {
 
   const supabase = await createClient();
 
-  const { data: clients } = await supabase
+  const { data: raw } = await supabase
     .from("clients")
-    .select("id, name, address, postcode, notes")
+    .select("id, name, full_name, address, postcode, notes")
     .eq("agency_id", agencyId)
     .order("name");
+
+  const clients = (raw ?? []).map((c) => ({
+    ...c,
+    name:
+      (c as { full_name?: string; name?: string }).full_name ??
+      (c as { full_name?: string; name?: string }).name ??
+      null,
+  }));
 
   return (
     <div className="space-y-6">
