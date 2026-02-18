@@ -59,7 +59,13 @@ export async function POST(request: Request) {
   });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const isConflict =
+      error.message?.toLowerCase().includes("overlapping") ||
+      error.message?.toLowerCase().includes("visit during this time");
+    return NextResponse.json(
+      { error: error.message },
+      { status: isConflict ? 409 : 500 }
+    );
   }
 
   return NextResponse.json(data);
