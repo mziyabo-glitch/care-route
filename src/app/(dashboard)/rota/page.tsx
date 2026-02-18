@@ -356,50 +356,51 @@ export default function RotaPage() {
                                   const hasConflict = grouped.conflictIds.has(v.id);
                                   const travel = grouped.travelTightByVisit[v.id];
                                   const travelRatio = travel ? travel.gap / travel.need : 1;
-                                  const normalCardClass = "border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50";
-                                  const jointCardClass = "border-violet-500 bg-violet-100 ring-2 ring-violet-300 hover:border-violet-600 hover:bg-violet-200";
-                                  const conflictCardClass = "border-red-500 bg-red-50 hover:border-red-600 hover:bg-red-100";
-                                  const cardClass = hasConflict
-                                    ? (v.is_joint
-                                      ? `${conflictCardClass} ring-2 ring-violet-400`
-                                      : conflictCardClass)
-                                    : (v.is_joint ? jointCardClass : normalCardClass);
+                                  const isJoint = !!v.is_joint;
+                                  const normalCard = "border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50";
+                                  const jointCard = "border-l-4 border-l-violet-600 border-y border-r border-y-violet-300 border-r-violet-300 bg-violet-50 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.15)] hover:bg-violet-100";
+                                  const conflictCard = "border-red-500 bg-red-50 hover:border-red-600 hover:bg-red-100";
+                                  const conflictJointCard = "border-l-4 border-l-violet-600 border-y border-r border-y-red-400 border-r-red-400 bg-red-50 hover:bg-red-100";
+                                  let cardClass = normalCard;
+                                  if (hasConflict && isJoint) cardClass = conflictJointCard;
+                                  else if (hasConflict) cardClass = conflictCard;
+                                  else if (isJoint) cardClass = jointCard;
                                   return (
                                     <button
                                       key={`${v.id}-${carer.id}`}
                                       type="button"
                                       onClick={() => setSelectedVisit(v)}
-                                      className={`relative block w-full rounded-md border px-2 py-1.5 text-left text-xs transition ${cardClass}`}
+                                      className={`relative block w-full rounded-md px-2 py-1.5 text-left text-xs transition ${cardClass}`}
                                     >
-                                      {v.is_joint && (
-                                        <div className="mb-1 flex items-center justify-between rounded bg-violet-700 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                                          <span>👥 Joint visit</span>
-                                          <span className="opacity-90">2 carers</span>
+                                      {isJoint && (
+                                        <div className="mb-1 flex items-center gap-1.5 rounded bg-violet-700 px-1.5 py-[3px] text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+                                          <span className="text-sm leading-none">👥</span>
+                                          <span>Joint visit</span>
                                         </div>
                                       )}
                                       <div className="flex items-center gap-1 font-medium text-gray-900">
                                         {hasConflict && (
-                                          <span className="text-amber-600" title="Overlap">
+                                          <span className="text-red-600" title="Overlap">
                                             ⚠
                                           </span>
                                         )}
                                         {formatTime(v.start_time)}–
                                         {formatTime(v.end_time)}
                                       </div>
-                                      <div className="text-gray-600">
+                                      <div className={isJoint ? "font-medium text-gray-900" : "text-gray-600"}>
                                         {v.client_name ?? "Unknown"}
                                       </div>
+                                      {v.otherCarerName && (
+                                        <div className="mt-0.5 rounded bg-violet-200 px-1.5 py-0.5 text-[10px] font-semibold text-violet-900">
+                                          With: {v.otherCarerName}
+                                        </div>
+                                      )}
                                       <div className="mt-1 flex flex-wrap items-center gap-1">
                                         <span
                                           className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${getStatusBadge(v.status)}`}
                                         >
                                           {v.status}
                                         </span>
-                                        {v.is_joint && (
-                                          <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-800">
-                                            👥 Joint
-                                          </span>
-                                        )}
                                         {travel && (
                                           <span
                                             className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
@@ -411,11 +412,6 @@ export default function RotaPage() {
                                           </span>
                                         )}
                                       </div>
-                                      {v.otherCarerName && (
-                                        <div className="mt-0.5 text-[10px] font-medium text-violet-800">
-                                          With: {v.otherCarerName}
-                                        </div>
-                                      )}
                                     </button>
                                   );
                                 })}
