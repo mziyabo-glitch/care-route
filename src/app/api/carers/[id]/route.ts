@@ -85,20 +85,10 @@ export async function DELETE(
   const { id } = await params;
   const supabase = await createClient();
 
-  // Soft delete: set active = false
-  const { data, error } = await supabase
-    .from("carers")
-    .update({ active: false })
-    .eq("id", id)
-    .eq("agency_id", agencyId)
-    .select("id")
-    .single();
+  const { error } = await supabase.rpc("archive_carer", { p_carer_id: id });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-  if (!data) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   return NextResponse.json({ success: true });

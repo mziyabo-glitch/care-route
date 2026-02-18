@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentAgencyId } from "@/lib/agency";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -9,16 +10,8 @@ export default async function DashboardPage() {
 
   if (!user) return null;
 
-  const { data: membership } = await supabase
-    .from("agency_members")
-    .select("agency_id")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (!membership) return null;
-
-  const agencyId = membership.agency_id;
+  const agencyId = await getCurrentAgencyId();
+  if (!agencyId) return null;
 
   const { data: agency } = await supabase
     .from("agencies")
@@ -26,12 +19,15 @@ export default async function DashboardPage() {
     .eq("id", agencyId)
     .single();
 
-  const [{ count: clientsCount }, { count: carersCount }, { count: visitsCount }] =
-    await Promise.all([
-      supabase.from("clients").select("id", { count: "exact", head: true }).eq("agency_id", agencyId),
-      supabase.from("carers").select("id", { count: "exact", head: true }).eq("agency_id", agencyId),
-      supabase.from("visits").select("id", { count: "exact", head: true }).eq("agency_id", agencyId),
-    ]);
+  const [
+    { data: clientsCount },
+    { data: carersCount },
+    { data: visitsCount },
+  ] = await Promise.all([
+    supabase.rpc("count_clients", { p_agency_id: agencyId }),
+    supabase.rpc("count_carers", { p_agency_id: agencyId }),
+    supabase.rpc("count_visits", { p_agency_id: agencyId }),
+  ]);
 
   return (
     <div className="space-y-6">

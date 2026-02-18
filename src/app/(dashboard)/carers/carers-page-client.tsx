@@ -84,13 +84,15 @@ export function CarersPageClient({
 
   async function handleDeleteConfirm() {
     if (!deleteCarer) return;
+    setError("");
     setSubmitting(true);
     const res = await fetch(`/api/carers/${deleteCarer.id}`, {
       method: "DELETE",
     });
+    const data = await res.json();
     setSubmitting(false);
     if (!res.ok) {
-      setError("Failed to deactivate carer");
+      setError(data.error ?? "Failed to deactivate carer");
       return;
     }
     setDeleteCarer(null);
@@ -269,7 +271,7 @@ export function CarersPageClient({
                             }}
                             className="text-sm font-medium text-red-600 hover:text-red-500"
                           >
-                            Delete
+                            Deactivate
                           </button>
                         ) : null}
                       </td>
@@ -390,7 +392,10 @@ export function CarersPageClient({
       {deleteCarer && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={() => setDeleteCarer(null)}
+          onClick={() => {
+            setDeleteCarer(null);
+            setError("");
+          }}
         >
           <div
             className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-lg"
@@ -403,6 +408,11 @@ export function CarersPageClient({
               {deleteCarer.name} will be marked inactive and will no longer
               appear in visit selections.
             </p>
+            {error ? (
+              <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </p>
+            ) : null}
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
@@ -414,7 +424,10 @@ export function CarersPageClient({
               </button>
               <button
                 type="button"
-                onClick={() => setDeleteCarer(null)}
+                onClick={() => {
+                  setDeleteCarer(null);
+                  setError("");
+                }}
                 className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 Cancel
