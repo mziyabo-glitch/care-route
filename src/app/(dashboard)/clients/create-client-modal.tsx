@@ -95,6 +95,17 @@ export function CreateClientModal({
               placeholder="Optional notes"
             />
           </div>
+          <div className="flex items-center gap-2 rounded-lg border-2 border-amber-300 bg-amber-50 p-3">
+            <input
+              type="checkbox"
+              id="client-double-up"
+              name="requires_double_up"
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            <label htmlFor="client-double-up" className="text-sm font-semibold text-amber-900">
+              ⚠ Requires double-up (2 carers per visit)
+            </label>
+          </div>
           {error ? (
             <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}

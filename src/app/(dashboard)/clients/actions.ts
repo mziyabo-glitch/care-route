@@ -10,6 +10,7 @@ export async function createClientAction(formData: FormData) {
   const address = (formData.get("address") as string)?.trim() || null;
   const postcode = (formData.get("postcode") as string)?.trim() || null;
   const notes = (formData.get("notes") as string)?.trim() || null;
+  const requiresDoubleUp = formData.get("requires_double_up") === "on";
 
   const agencyId = await getCurrentAgencyId();
   if (!agencyId) {
@@ -26,6 +27,7 @@ export async function createClientAction(formData: FormData) {
     p_address: address,
     p_postcode: postcode,
     p_notes: notes,
+    p_requires_double_up: requiresDoubleUp,
   });
 
   if (error) {

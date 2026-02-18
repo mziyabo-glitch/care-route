@@ -11,6 +11,9 @@ type Visit = {
   carer_ids?: string[];
   assignments?: Assignment[];
   is_joint?: boolean;
+  requires_double_up?: boolean;
+  assigned_count?: number;
+  missing_second_carer?: boolean;
   client_name: string | null;
   carer_name: string | null;
   start_time: string;
@@ -237,11 +240,22 @@ export function VisitsPageClient({
           ) : (
             initialVisits.map((v) => {
               const isJoint = !!v.is_joint || (Array.isArray(v.carer_ids) && v.carer_ids.length >= 2) || ((v.assignments?.length ?? 0) >= 2);
+              const missingSecond = !!v.missing_second_carer || (!!v.requires_double_up && !isJoint);
+              const leftBorder = missingSecond
+                ? "border-l-4 border-l-red-500 bg-red-50/40"
+                : isJoint
+                  ? "border-l-4 border-l-violet-500 bg-violet-50/50"
+                  : "";
               return (
-              <li key={v.id} className={`px-4 py-4 ${isJoint ? "border-l-4 border-l-violet-500 bg-violet-50/50" : ""}`}>
+              <li key={v.id} className={`px-4 py-4 ${leftBorder}`}>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    {isJoint && (
+                    {missingSecond && (
+                      <div className="mb-1 inline-flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                        <span>❗</span> Missing 2nd carer
+                      </div>
+                    )}
+                    {isJoint && !missingSecond && (
                       <div className="mb-1 inline-flex items-center gap-1 rounded bg-violet-700 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
                         <span>👥</span> Joint visit
                       </div>
@@ -257,6 +271,19 @@ export function VisitsPageClient({
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    {missingSecond && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError("");
+                          setEditVisit(v);
+                          setEditJoint(true);
+                        }}
+                        className="rounded-md bg-red-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-red-500"
+                      >
+                        + Assign 2nd
+                      </button>
+                    )}
                     <select
                       value={v.status}
                       onChange={(e) => handleStatusChange(v, e.target.value)}

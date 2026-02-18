@@ -10,6 +10,7 @@ type Client = {
   address: string | null;
   postcode: string | null;
   notes: string | null;
+  requires_double_up?: boolean;
 };
 
 export function ClientsList({ clients }: { clients: Client[] }) {
@@ -69,7 +70,14 @@ export function ClientsList({ clients }: { clients: Client[] }) {
             clients.map((c) => (
               <li key={c.id} className="flex items-start justify-between gap-4 px-4 py-4">
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium text-gray-900">{c.name}</div>
+                  <div className="flex items-center gap-2 font-medium text-gray-900">
+                    {c.name}
+                    {c.requires_double_up && (
+                      <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-800">
+                        ⚠ Double-up
+                      </span>
+                    )}
+                  </div>
                   {(c.address || c.postcode) && (
                     <div className="mt-1 text-sm text-gray-500">
                       {[c.address, c.postcode].filter(Boolean).join(", ")}
