@@ -42,6 +42,12 @@ export function DashboardNav() {
       >
         Rota
       </Link>
+      <Link
+        href="/settings/members"
+        className={`${link} ${pathname.startsWith("/settings") ? activeLink : inactiveLink}`}
+      >
+        Settings
+      </Link>
     </nav>
   );
 }
