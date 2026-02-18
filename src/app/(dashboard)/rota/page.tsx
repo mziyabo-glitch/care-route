@@ -123,11 +123,12 @@ export default function RotaPage() {
     }
   }, [weekParam]);
 
-  // Group visits by carer_id and day (date string YYYY-MM-DD)
+  // Group visits by carer_id and day, sort by start_time, detect overlapping adjacent visits
   const grouped = useMemo(() => {
     const byCarerDay: Record<string, Record<string, Visit[]>> = {};
     const carerIds = new Set(carers.map((c) => c.id));
     const unassigned: Visit[] = [];
+    const conflictIds = new Set<string>();
 
     for (const v of visits) {
       const dayKey = v.start_time.slice(0, 10);
@@ -144,14 +145,24 @@ export default function RotaPage() {
     // Sort visits within each cell by start_time
     for (const carerId of Object.keys(byCarerDay)) {
       for (const dayKey of Object.keys(byCarerDay[carerId])) {
-        byCarerDay[carerId][dayKey].sort(
+        const cellVisits = byCarerDay[carerId][dayKey];
+        cellVisits.sort(
           (a, b) =>
             new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
         );
+        // Check adjacent visits for overlap: current.start_time < previous.end_time
+        for (let i = 1; i < cellVisits.length; i++) {
+          const prev = cellVisits[i - 1];
+          const curr = cellVisits[i];
+          if (new Date(curr.start_time).getTime() < new Date(prev.end_time).getTime()) {
+            conflictIds.add(prev.id);
+            conflictIds.add(curr.id);
+          }
+        }
       }
     }
 
-    return { byCarerDay, unassigned };
+    return { byCarerDay, unassigned, conflictIds };
   }, [visits, carers]);
 
   const goPrev = () => {
@@ -292,27 +303,39 @@ export default function RotaPage() {
                               <span className="text-xs text-gray-400">—</span>
                             ) : (
                               <div className="space-y-2">
-                                {cellVisits.map((v) => (
-                                  <button
-                                    key={v.id}
-                                    type="button"
-                                    onClick={() => setSelectedVisit(v)}
-                                    className="block w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-left text-xs transition hover:border-indigo-300 hover:bg-indigo-50"
-                                  >
-                                    <div className="font-medium text-gray-900">
-                                      {formatTime(v.start_time)}–
-                                      {formatTime(v.end_time)}
-                                    </div>
-                                    <div className="text-gray-600">
-                                      {v.client_name ?? "Unknown"}
-                                    </div>
-                                    <span
-                                      className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${getStatusBadge(v.status)}`}
+                                {cellVisits.map((v) => {
+                                  const hasConflict = grouped.conflictIds.has(v.id);
+                                  return (
+                                    <button
+                                      key={v.id}
+                                      type="button"
+                                      onClick={() => setSelectedVisit(v)}
+                                      className={`block w-full rounded-md border px-2 py-1.5 text-left text-xs transition ${
+                                        hasConflict
+                                          ? "border-red-500 bg-red-50 hover:border-red-600 hover:bg-red-100"
+                                          : "border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50"
+                                      }`}
                                     >
-                                      {v.status}
-                                    </span>
-                                  </button>
-                                ))}
+                                      <div className="flex items-center gap-1 font-medium text-gray-900">
+                                        {hasConflict && (
+                                          <span className="text-amber-600" title="Overlap">
+                                            ⚠
+                                          </span>
+                                        )}
+                                        {formatTime(v.start_time)}–
+                                        {formatTime(v.end_time)}
+                                      </div>
+                                      <div className="text-gray-600">
+                                        {v.client_name ?? "Unknown"}
+                                      </div>
+                                      <span
+                                        className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${getStatusBadge(v.status)}`}
+                                      >
+                                        {v.status}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
                               </div>
                             )}
                           </td>
