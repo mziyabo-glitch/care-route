@@ -12,10 +12,8 @@ type Client = {
 };
 
 export function ClientsList({
-  agencyId,
   clients,
 }: {
-  agencyId: string;
   clients: Client[];
 }) {
   const [showModal, setShowModal] = useState(false);
@@ -56,7 +54,6 @@ export function ClientsList({
       </div>
       {showModal && (
         <CreateClientModal
-          agencyId={agencyId}
           onClose={() => setShowModal(false)}
         />
       )}

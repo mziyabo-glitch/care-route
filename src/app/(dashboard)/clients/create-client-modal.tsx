@@ -5,10 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClientAction } from "./actions";
 
 export function CreateClientModal({
-  agencyId,
   onClose,
 }: {
-  agencyId: string;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -16,7 +14,7 @@ export function CreateClientModal({
 
   async function handleSubmit(formData: FormData) {
     setError("");
-    const result = await createClientAction(agencyId, formData);
+    const result = await createClientAction(formData);
     if (result.error) {
       setError(result.error);
       return;
