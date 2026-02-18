@@ -177,7 +177,9 @@ export default function RotaPage() {
       for (const cid of validIds) {
         if (!byCarerDay[cid]) byCarerDay[cid] = {};
         if (!byCarerDay[cid][dayKey]) byCarerDay[cid][dayKey] = [];
-        const otherName = isJointVisit && cid !== primaryId ? primaryName : null;
+        const otherName = isJointVisit
+          ? (cid === primaryId ? secondaryName ?? null : primaryName ?? null)
+          : null;
         byCarerDay[cid][dayKey].push({ ...v, is_joint: isJointVisit, otherCarerName: otherName });
       }
     }
@@ -354,23 +356,25 @@ export default function RotaPage() {
                                   const hasConflict = grouped.conflictIds.has(v.id);
                                   const travel = grouped.travelTightByVisit[v.id];
                                   const travelRatio = travel ? travel.gap / travel.need : 1;
-                                  const baseCardClass = v.is_joint
-                                    ? "border-violet-400 bg-violet-50 hover:border-violet-500 hover:bg-violet-100"
-                                    : "border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50";
+                                  const normalCardClass = "border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50";
+                                  const jointCardClass = "border-violet-500 bg-violet-100 ring-2 ring-violet-300 hover:border-violet-600 hover:bg-violet-200";
+                                  const conflictCardClass = "border-red-500 bg-red-50 hover:border-red-600 hover:bg-red-100";
+                                  const cardClass = hasConflict
+                                    ? (v.is_joint
+                                      ? `${conflictCardClass} ring-2 ring-violet-400`
+                                      : conflictCardClass)
+                                    : (v.is_joint ? jointCardClass : normalCardClass);
                                   return (
                                     <button
                                       key={`${v.id}-${carer.id}`}
                                       type="button"
                                       onClick={() => setSelectedVisit(v)}
-                                      className={`block w-full rounded-md border px-2 py-1.5 text-left text-xs transition ${
-                                        hasConflict
-                                          ? "border-red-500 bg-red-50 hover:border-red-600 hover:bg-red-100"
-                                          : baseCardClass
-                                      }`}
+                                      className={`relative block w-full rounded-md border px-2 py-1.5 text-left text-xs transition ${cardClass}`}
                                     >
                                       {v.is_joint && (
-                                        <div className="mb-1 rounded bg-violet-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-900">
-                                          Joint visit
+                                        <div className="mb-1 flex items-center justify-between rounded bg-violet-700 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                                          <span>👥 Joint visit</span>
+                                          <span className="opacity-90">2 carers</span>
                                         </div>
                                       )}
                                       <div className="flex items-center gap-1 font-medium text-gray-900">
@@ -408,7 +412,7 @@ export default function RotaPage() {
                                         )}
                                       </div>
                                       {v.otherCarerName && (
-                                        <div className="mt-0.5 text-[10px] text-gray-500">
+                                        <div className="mt-0.5 text-[10px] font-medium text-violet-800">
                                           With: {v.otherCarerName}
                                         </div>
                                       )}
