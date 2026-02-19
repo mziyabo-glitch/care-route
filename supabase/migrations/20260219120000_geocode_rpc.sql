@@ -43,3 +43,25 @@ $$;
 
 revoke all on function public.get_client_postcode(uuid, uuid) from public;
 grant execute on function public.get_client_postcode(uuid, uuid) to authenticated;
+
+-- Lookup travel_cache entries for given agency + client pairs (bypasses RLS).
+create or replace function public.lookup_travel_cache(
+  p_agency_id uuid,
+  p_from_ids uuid[],
+  p_to_ids uuid[]
+)
+returns table(from_client_id uuid, to_client_id uuid, travel_minutes integer)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select tc.from_client_id, tc.to_client_id, tc.travel_minutes
+  from public.travel_cache tc
+  where tc.agency_id = p_agency_id
+    and tc.from_client_id = any(p_from_ids)
+    and tc.to_client_id = any(p_to_ids);
+$$;
+
+revoke all on function public.lookup_travel_cache(uuid, uuid[], uuid[]) from public;
+grant execute on function public.lookup_travel_cache(uuid, uuid[], uuid[]) to authenticated;

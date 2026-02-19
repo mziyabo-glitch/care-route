@@ -22,7 +22,7 @@ export function CreateClientModal({
       return;
     }
 
-    // Geocode postcode in background after successful save
+    // Geocode postcode after successful save, then close modal
     if (result.clientId && result.postcode) {
       setGeocodeStatus("pending");
       try {
@@ -41,8 +41,8 @@ export function CreateClientModal({
       }
     }
 
-    onClose();
     router.refresh();
+    onClose();
   }
 
   return (
@@ -133,12 +133,28 @@ export function CreateClientModal({
               {error}
             </p>
           ) : null}
+          {geocodeStatus === "pending" && (
+            <p className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">
+              Geocoding postcode…
+            </p>
+          )}
+          {geocodeStatus === "ok" && (
+            <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              ✓ Geocoded successfully
+            </p>
+          )}
+          {geocodeStatus === "failed" && (
+            <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              Geocode failed — you can geocode later from the client list
+            </p>
+          )}
           <div className="flex gap-3">
             <button
               type="submit"
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+              disabled={geocodeStatus === "pending"}
+              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-60"
             >
-              Create
+              {geocodeStatus === "pending" ? "Saving…" : "Create"}
             </button>
             <button
               type="button"

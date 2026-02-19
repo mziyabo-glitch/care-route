@@ -100,15 +100,14 @@ export async function GET(request: Request) {
     const fromIds = [...new Set(Object.values(pairData).map((p) => p.fromId))];
     const toIds = [...new Set(Object.values(pairData).map((p) => p.toId))];
 
-    const { data: cached } = await supabase
-      .from("travel_cache")
-      .select("from_client_id, to_client_id, travel_minutes")
-      .eq("agency_id", agencyId)
-      .in("from_client_id", fromIds)
-      .in("to_client_id", toIds);
+    const { data: cached } = await supabase.rpc("lookup_travel_cache", {
+      p_agency_id: agencyId,
+      p_from_ids: fromIds,
+      p_to_ids: toIds,
+    });
 
     const cacheMap = new Set<string>();
-    if (cached) {
+    if (Array.isArray(cached)) {
       for (const row of cached) {
         const pk = `${row.from_client_id}|${row.to_client_id}`;
         if (pairKeys.has(pk)) {
