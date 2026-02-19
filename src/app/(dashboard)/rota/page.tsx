@@ -32,6 +32,15 @@ type VisitWithContext = Visit & {
   travelTight?: { gap: number; need: number };
 };
 
+type ReorderSuggestion = {
+  carerId: string;
+  carerName: string | null;
+  dayKey: string;
+  visitA: VisitWithContext;
+  visitB: VisitWithContext;
+  savingsMinutes: number;
+};
+
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function getMondayOfWeek(d: Date): Date {
@@ -92,6 +101,23 @@ function estimateTravelFallback(postcodeA: string | null | undefined, postcodeB:
   return 25;
 }
 
+/** Get travel minutes between two clients; uses server cache, symmetric fallback, then postcode heuristic */
+function getTravelMinutes(
+  from: { client_id: string; client_postcode?: string | null },
+  to: { client_id: string; client_postcode?: string | null },
+  serverTravelTimes: Record<string, number>
+): number {
+  const fwd = `${from.client_id}|${to.client_id}`;
+  const rev = `${to.client_id}|${from.client_id}`;
+  return (
+    serverTravelTimes[fwd] ??
+    serverTravelTimes[rev] ??
+    estimateTravelFallback(from.client_postcode, to.client_postcode)
+  );
+}
+
+const MIN_SAVINGS_FOR_SUGGESTION = 8;
+
 export default function RotaPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -111,6 +137,8 @@ export default function RotaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedVisit, setSelectedVisit] = useState<VisitWithContext | null>(null);
+  const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
+  const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
 
   const { start, end, days } = useMemo(
     () => getWeekRange(weekStart),
@@ -152,6 +180,11 @@ export default function RotaPage() {
       if (!isNaN(d.getTime())) setWeekStart(getMondayOfWeek(d));
     }
   }, [weekParam]);
+
+  // Reset dismissed when week changes so suggestions show for new week
+  useEffect(() => {
+    setSuggestionsDismissed(false);
+  }, [weekStart.toISOString().slice(0, 10)]);
 
   // Group visits by carer (from assignments/carer_ids), put joint visits in BOTH carers' rows
   const grouped = useMemo(() => {
@@ -252,6 +285,54 @@ export default function RotaPage() {
     return { byCarerDay, unassigned, conflictIds, travelTightByVisit, carerStats };
   }, [visits, carers, serverTravelTimes]);
 
+  // Route reordering suggestions: one per carer/day with largest saving > 8 min
+  const reorderSuggestions = useMemo(() => {
+    const out: ReorderSuggestion[] = [];
+    const byCarerDay = grouped.byCarerDay;
+    const carerNames = Object.fromEntries(carers.map((c) => [c.id, c.name]));
+
+    for (const carerId of Object.keys(byCarerDay)) {
+      for (const dayKey of Object.keys(byCarerDay[carerId])) {
+        const list = byCarerDay[carerId][dayKey];
+        if (list.length < 2) continue;
+
+        const sorted = [...list].sort(
+          (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+        );
+
+        const totalTravel = (visits: VisitWithContext[]) => {
+          let sum = 0;
+          for (let i = 1; i < visits.length; i++) {
+            sum += getTravelMinutes(visits[i - 1], visits[i], serverTravelTimes);
+          }
+          return sum;
+        };
+
+        const currentTotal = totalTravel(sorted);
+        let best: ReorderSuggestion | null = null;
+
+        for (let i = 0; i < sorted.length - 1; i++) {
+          const swapped = [...sorted];
+          [swapped[i], swapped[i + 1]] = [swapped[i + 1], swapped[i]];
+          const swappedTotal = totalTravel(swapped);
+          const savings = currentTotal - swappedTotal;
+          if (savings > MIN_SAVINGS_FOR_SUGGESTION && (!best || savings > best.savingsMinutes)) {
+            best = {
+              carerId,
+              carerName: carerNames[carerId] ?? null,
+              dayKey,
+              visitA: sorted[i],
+              visitB: sorted[i + 1],
+              savingsMinutes: savings,
+            };
+          }
+        }
+        if (best) out.push(best);
+      }
+    }
+    return out;
+  }, [grouped.byCarerDay, carers, serverTravelTimes]);
+
   const goPrev = () => {
     const prev = new Date(weekStart);
     prev.setDate(prev.getDate() - 7);
@@ -311,6 +392,66 @@ export default function RotaPage() {
         </div>
       ) : (
         <>
+          {/* Route reorder suggestions panel */}
+          {!suggestionsDismissed && reorderSuggestions.length > 0 && (
+            <div className="rounded-xl border border-blue-200/60 bg-blue-50/60 px-5 py-4">
+              <div className="flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => setSuggestionsExpanded((e) => !e)}
+                  className="flex flex-1 items-center gap-3 text-left"
+                >
+                  <span className="text-xl" aria-hidden>💡</span>
+                  <span className="text-sm font-medium text-slate-800">
+                    {reorderSuggestions.length} route reorder suggestion{reorderSuggestions.length !== 1 ? "s" : ""} (save up to {Math.max(0, ...reorderSuggestions.map((s) => s.savingsMinutes))} min)
+                  </span>
+                  <span className="text-slate-500">
+                    {suggestionsExpanded ? "▼" : "▶"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSuggestionsDismissed(true)}
+                  className="text-xs font-medium text-slate-500 hover:text-slate-700"
+                >
+                  Dismiss
+                </button>
+              </div>
+              {suggestionsExpanded && (
+                <ul className="mt-4 space-y-2 border-t border-blue-200/50 pt-4">
+                  {reorderSuggestions.map((s) => (
+                    <li
+                      key={`${s.carerId}-${s.dayKey}`}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/70 px-4 py-3 text-sm"
+                    >
+                      <div>
+                        <span className="font-medium text-slate-900">{s.carerName ?? "Carer"}</span>
+                        <span className="mx-2 text-slate-400">·</span>
+                        <span className="text-slate-600">{formatDateShort(new Date(s.dayKey))}</span>
+                        <span className="mx-2 text-slate-400">·</span>
+                        <span className="text-slate-600">
+                          Swap {formatTime(s.visitA.start_time)} ({s.visitA.client_name ?? "—"}) with {formatTime(s.visitB.start_time)} ({s.visitB.client_name ?? "—"})
+                        </span>
+                        <span className="ml-2 font-medium text-green-700">
+                          −{s.savingsMinutes} min
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          document.getElementById(`rota-cell-${s.carerId}-${s.dayKey}`)?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                        className="shrink-0 rounded-lg bg-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-200"
+                      >
+                        Review
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {/* Unassigned section */}
           {grouped.unassigned.length > 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-5">
@@ -430,6 +571,7 @@ export default function RotaPage() {
                           grouped.byCarerDay[carer.id]?.[dayKey] ?? [];
                         return (
                           <td
+                            id={`rota-cell-${carer.id}-${dayKey}`}
                             key={dayKey}
                             className="min-w-[110px] align-top border-l border-slate-200/60 bg-slate-50/30 px-2 py-3"
                           >
