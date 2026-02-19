@@ -27,12 +27,10 @@ export default async function ClientsPage() {
   const clients: ClientRow[] = Array.isArray(raw) ? raw : [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">Clients</h1>
-      </div>
+    <div className="space-y-8">
+      <h1 className="text-2xl font-semibold text-slate-900">Clients</h1>
       {fetchError ? (
-        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
           Error loading clients: {fetchError.message}
         </p>
       ) : null}

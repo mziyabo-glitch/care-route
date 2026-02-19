@@ -31,11 +31,11 @@ function roleBadgeClass(role: string) {
     case "owner":
       return "bg-amber-100 text-amber-800";
     case "admin":
-      return "bg-indigo-100 text-indigo-800";
+      return "bg-blue-100 text-blue-800";
     case "manager":
       return "bg-blue-100 text-blue-800";
     default:
-      return "bg-gray-100 text-gray-700";
+      return "bg-slate-100 text-slate-700";
   }
 }
 
@@ -120,9 +120,9 @@ export function MembersPageClient({ myRole }: { myRole: string }) {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
-        <p className="mt-3 text-sm text-gray-500">Loading team...</p>
+      <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+        <p className="mt-3 text-sm text-slate-500">Loading team...</p>
       </div>
     );
   }
@@ -143,21 +143,21 @@ export function MembersPageClient({ myRole }: { myRole: string }) {
       )}
 
       {/* Members list */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-gray-900">Members</h2>
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h2 className="text-sm font-semibold text-slate-900">Members</h2>
         </div>
-        <ul className="divide-y divide-gray-200">
+        <ul className="divide-y divide-slate-200">
           {members.map((m) => (
             <li
               key={m.id}
               className="flex items-center justify-between gap-4 px-4 py-3"
             >
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-gray-900">
+                <div className="truncate text-sm font-medium text-slate-900">
                   {m.email}
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-slate-500">
                   Joined{" "}
                   {new Date(m.created_at).toLocaleDateString(undefined, {
                     day: "numeric",
@@ -178,9 +178,9 @@ export function MembersPageClient({ myRole }: { myRole: string }) {
 
       {/* Invite form (admin only) */}
       {isAdmin && (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 px-4 py-3">
-            <h2 className="text-sm font-semibold text-gray-900">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <h2 className="text-sm font-semibold text-slate-900">
               Invite a team member
             </h2>
           </div>
@@ -189,7 +189,7 @@ export function MembersPageClient({ myRole }: { myRole: string }) {
             className="flex flex-wrap items-end gap-3 px-4 py-4"
           >
             <div className="min-w-[200px] flex-1">
-              <label className="mb-1 block text-xs font-medium text-gray-700">
+              <label className="mb-1 block text-xs font-medium text-slate-700">
                 Email address
               </label>
               <input
@@ -198,17 +198,17 @@ export function MembersPageClient({ myRole }: { myRole: string }) {
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 placeholder="colleague@example.com"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
               />
             </div>
             <div className="w-32">
-              <label className="mb-1 block text-xs font-medium text-gray-700">
+              <label className="mb-1 block text-xs font-medium text-slate-700">
                 Role
               </label>
               <select
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
               >
                 {ROLE_OPTIONS.map((r) => (
                   <option key={r.value} value={r.value}>
@@ -220,24 +220,24 @@ export function MembersPageClient({ myRole }: { myRole: string }) {
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-60"
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-60"
             >
               {submitting ? "Sending..." : "Create invite"}
             </button>
           </form>
           {lastInviteLink && (
-            <div className="border-t border-gray-200 bg-green-50 px-4 py-3">
+            <div className="border-t border-slate-200 bg-green-50 px-4 py-3">
               <p className="mb-1 text-xs font-semibold text-green-800">
                 Invite link created — share it with the invitee:
               </p>
               <div className="flex items-center gap-2">
-                <code className="flex-1 truncate rounded bg-white px-2 py-1 text-xs text-gray-800 ring-1 ring-gray-200">
+                <code className="flex-1 truncate rounded bg-white px-2 py-1 text-xs text-slate-800 ring-1 ring-slate-200">
                   {lastInviteLink}
                 </code>
                 <button
                   type="button"
                   onClick={() => copyToClipboard(lastInviteLink, "last")}
-                  className="shrink-0 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500"
+                  className="shrink-0 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
                 >
                   {copiedToken === "last" ? "Copied!" : "Copy"}
                 </button>
@@ -249,13 +249,13 @@ export function MembersPageClient({ myRole }: { myRole: string }) {
 
       {/* Pending invites (admin only) */}
       {isAdmin && invites.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 px-4 py-3">
-            <h2 className="text-sm font-semibold text-gray-900">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <h2 className="text-sm font-semibold text-slate-900">
               Pending invites
             </h2>
           </div>
-          <ul className="divide-y divide-gray-200">
+          <ul className="divide-y divide-slate-200">
             {invites.map((inv) => {
               const expired = new Date(inv.expires_at) < new Date();
               const accepted = !!inv.accepted_at;
@@ -266,10 +266,10 @@ export function MembersPageClient({ myRole }: { myRole: string }) {
                   className="flex items-center justify-between gap-4 px-4 py-3"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-gray-900">
+                    <div className="truncate text-sm font-medium text-slate-900">
                       {inv.email}
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${roleBadgeClass(inv.role)}`}
                       >
@@ -298,7 +298,7 @@ export function MembersPageClient({ myRole }: { myRole: string }) {
                     <button
                       type="button"
                       onClick={() => copyToClipboard(link, inv.token)}
-                      className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      className="shrink-0 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                     >
                       {copiedToken === inv.token ? "Copied!" : "Copy link"}
                     </button>
@@ -311,7 +311,7 @@ export function MembersPageClient({ myRole }: { myRole: string }) {
       )}
 
       {!isAdmin && (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-slate-500">
           Only admins can invite new members and manage roles.
         </p>
       )}

@@ -112,11 +112,11 @@ export function VisitsPageClient({
   function getStatusBadgeClass(status: string) {
     switch (status) {
       case "completed":
-        return "bg-gray-100 text-gray-600";
+        return "bg-slate-100 text-slate-600";
       case "missed":
-        return "bg-red-100 text-red-700";
+        return "bg-red-100 text-red-600";
       default:
-        return "bg-indigo-50 text-indigo-700";
+        return "bg-blue-50 text-blue-700";
     }
   }
 
@@ -248,22 +248,22 @@ export function VisitsPageClient({
 
   return (
     <>
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        {/* Toolbar: Add + Filter + Sort */}
-        <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-4 py-3">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center gap-4 border-b border-slate-200 px-6 py-4">
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
             disabled={clients.length === 0 || carers.length === 0}
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Add visit
           </button>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-3">
             <select
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none ring-indigo-500 focus:ring-2"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none ring-blue-600 focus:ring-2"
             >
               <option value="">All dates</option>
               {uniqueDates.map((d) => {
@@ -278,31 +278,31 @@ export function VisitsPageClient({
             <button
               type="button"
               onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
               {sortOrder === "newest" ? "↓ Newest" : "↑ Oldest"}
             </button>
           </div>
           {(clients.length === 0 || carers.length === 0) && (
-            <p className="w-full text-sm text-gray-500">
+            <p className="w-full text-sm text-slate-500">
               Add at least one client and one carer first.
             </p>
           )}
         </div>
         {error ? (
-          <div className="border-b border-red-200 bg-red-50 px-4 py-3">
+          <div className="border-b border-red-200 bg-red-50/50 px-6 py-4">
             <p className="text-sm text-red-700">{error}</p>
             <button
               type="button"
               onClick={() => setError("")}
-              className="mt-1 text-xs font-medium text-red-600 underline hover:no-underline"
+              className="mt-2 text-xs font-medium text-red-600 underline hover:no-underline"
             >
               Dismiss
             </button>
           </div>
         ) : null}
         {filteredVisits.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-gray-500">
+          <div className="px-6 py-16 text-center text-sm text-slate-500">
             {initialVisits.length === 0
               ? "No visits yet. Schedule your first visit."
               : "No visits match the selected date."}
@@ -311,13 +311,13 @@ export function VisitsPageClient({
           <div>
             {groupedByDay.map((group) => (
               <div key={group.date}>
-                <div className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 px-4 py-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <div className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/90 px-6 py-3 shadow-sm">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
                     {group.label}
-                    <span className="ml-2 text-gray-400">({group.visits.length})</span>
+                    <span className="ml-2 font-normal text-slate-400">({group.visits.length})</span>
                   </h3>
                 </div>
-                <ul className="divide-y divide-gray-100">
+                <ul className="divide-y divide-slate-200">
                   {group.visits.map((v) => {
                     const isJoint = !!v.is_joint || (Array.isArray(v.carer_ids) && v.carer_ids.length >= 2) || ((v.assignments?.length ?? 0) >= 2);
                     const missingSecond = !!v.missing_second_carer || (!!v.requires_double_up && !isJoint);
@@ -325,65 +325,57 @@ export function VisitsPageClient({
                     return (
                     <li
                       key={v.id}
-                      className={`flex items-start gap-3 px-4 py-3 ${missingSecond ? "border-l-[3px] border-l-red-500 bg-red-50/30" : ""}`}
+                      className={`flex items-start gap-4 px-6 py-4 ${missingSecond ? "border-l-[3px] border-l-red-500 bg-red-50/20" : ""}`}
                     >
-                      {/* Indicator dot */}
                       <div className="mt-1.5 shrink-0">
                         {missingSecond ? (
                           <span className="block h-2 w-2 rounded-full bg-red-500" />
                         ) : v.status === "completed" ? (
-                          <span className="block h-2 w-2 rounded-full bg-gray-300" />
+                          <span className="block h-2 w-2 rounded-full bg-slate-300" />
                         ) : allClear ? (
-                          <span className="block h-2 w-2 rounded-full bg-emerald-400" />
+                          <span className="block h-2 w-2 rounded-full bg-green-500" />
                         ) : (
-                          <span className="block h-2 w-2 rounded-full bg-amber-400" />
+                          <span className="block h-2 w-2 rounded-full bg-amber-500" />
                         )}
                       </div>
-                      {/* Content */}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900">
+                          <span className="font-semibold text-slate-900">
                             {v.client_name ?? "Unknown"}
                           </span>
-                          <span className="text-gray-400">→</span>
-                          <span className="truncate text-sm text-gray-700">
+                          <span className="text-slate-300">→</span>
+                          <span className="truncate text-sm text-slate-600">
                             {v.assignments?.map((a) => a.carer_name ?? "Unknown").join(" + ") ?? v.carer_name ?? "Unknown"}
                           </span>
                         </div>
-                        <div className="mt-0.5 text-xs text-gray-500">
+                        <div className="mt-1 text-xs text-slate-500">
                           {formatDateTime(v.start_time)} – {formatDateTime(v.end_time)}
                         </div>
                         {v.notes && (
-                          <div className="mt-0.5 text-xs text-gray-500">{v.notes}</div>
+                          <div className="mt-0.5 text-xs text-slate-500">{v.notes}</div>
                         )}
-                        {/* Badge row */}
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          <span className={`inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${getStatusBadgeClass(v.status)}`}>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className={`rounded-md px-2 py-0.5 text-[10px] font-medium ${getStatusBadgeClass(v.status)}`}>
                             {v.status}
                           </span>
                           {missingSecond && (
-                            <span className="inline-flex items-center gap-0.5 rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
-                              ❗ Missing 2nd
+                            <span className="rounded-md bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                              Missing 2nd
                             </span>
                           )}
                           {isJoint && (
-                            <span className="inline-flex items-center gap-0.5 rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
-                              👥 Joint
+                            <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                              Joint
                             </span>
                           )}
                         </div>
                       </div>
-                      {/* Actions */}
                       <div className="flex shrink-0 items-center gap-2">
                         {missingSecond && (
                           <button
                             type="button"
-                            onClick={() => {
-                              setError("");
-                              setEditVisit(v);
-                              setEditJoint(true);
-                            }}
-                            className="rounded-md bg-red-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-red-500"
+                            onClick={() => { setError(""); setEditVisit(v); setEditJoint(true); }}
+                            className="rounded-lg bg-red-600 px-2.5 py-1.5 text-[10px] font-medium text-white transition hover:bg-red-500"
                           >
                             + Assign 2nd
                           </button>
@@ -392,33 +384,24 @@ export function VisitsPageClient({
                           value={v.status}
                           onChange={(e) => handleStatusChange(v, e.target.value)}
                           disabled={submitting}
-                          className={`rounded-md px-2 py-1 text-[11px] font-medium outline-none ring-indigo-500 focus:ring-2 disabled:opacity-60 ${getStatusBadgeClass(v.status)}`}
+                          className={`rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium outline-none ring-blue-600 focus:ring-2 disabled:opacity-60 ${getStatusBadgeClass(v.status)}`}
                         >
                           {STATUS_OPTIONS.map((s) => (
-                            <option key={s.value} value={s.value}>
-                              {s.label}
-                            </option>
+                            <option key={s.value} value={s.value}>{s.label}</option>
                           ))}
                         </select>
                         <button
                           type="button"
-                          onClick={() => {
-                            setError("");
-                            setEditVisit(v);
-                            setEditJoint(!!v.is_joint);
-                          }}
-                          className="text-xs font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-60"
+                          onClick={() => { setError(""); setEditVisit(v); setEditJoint(!!v.is_joint); }}
+                          className="text-xs font-medium text-blue-600 transition hover:text-blue-500 disabled:opacity-60"
                           disabled={submitting}
                         >
                           Edit
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            setError("");
-                            setDeleteVisit(v);
-                          }}
-                          className="text-xs font-medium text-red-600 hover:text-red-500 disabled:opacity-60"
+                          onClick={() => { setError(""); setDeleteVisit(v); }}
+                          className="text-xs font-medium text-red-600 transition hover:text-red-500 disabled:opacity-60"
                           disabled={submitting}
                         >
                           Delete
@@ -437,23 +420,23 @@ export function VisitsPageClient({
       {/* Create modal */}
       {showCreateModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
           onClick={() => { setShowCreateModal(false); setCreateJoint(false); }}
         >
           <div
-            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-lg"
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-gray-900">Add visit</h2>
-            <form onSubmit={handleCreate} className="mt-4 space-y-4">
+            <h2 className="text-lg font-semibold text-slate-900">Add visit</h2>
+            <form onSubmit={handleCreate} className="mt-5 space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
                   Client *
                 </label>
                 <select
                   name="client_id"
                   required
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
                 >
                   <option value="">Select client</option>
                   {clients.map((c) => (
@@ -464,13 +447,13 @@ export function VisitsPageClient({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
                   Primary carer *
                 </label>
                 <select
                   name="primary_carer_id"
                   required
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
                 >
                   <option value="">Select carer</option>
                   {carers.map((c) => (
@@ -481,10 +464,8 @@ export function VisitsPageClient({
                 </select>
               </div>
               <div
-                className={`rounded-lg border-2 p-3 transition-colors ${
-                  createJoint
-                    ? "border-violet-400 bg-violet-50"
-                    : "border-transparent"
+                className={`rounded-xl border-2 p-4 transition-colors ${
+                  createJoint ? "border-blue-200 bg-blue-50/50" : "border-slate-200"
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -494,21 +475,21 @@ export function VisitsPageClient({
                     name="joint_visit"
                     checked={createJoint}
                     onChange={(e) => setCreateJoint(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <label htmlFor="create-joint" className="text-sm font-semibold text-gray-900">
-                    👥 Joint visit (2 carers)
+                  <label htmlFor="create-joint" className="text-sm font-semibold text-slate-900">
+                    Joint visit (2 carers)
                   </label>
                 </div>
                 {createJoint && (
                   <div className="mt-3">
-                    <label className="mb-1 block text-sm font-medium text-violet-800">
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
                       Second carer *
                     </label>
                     <select
                       name="secondary_carer_id"
                       required
-                      className="w-full rounded-md border border-violet-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none ring-violet-500 focus:ring-2"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
                     >
                       <option value="">Select second carer</option>
                       {carers.map((c) => (
@@ -521,44 +502,34 @@ export function VisitsPageClient({
                 )}
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Start *
-                </label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Start *</label>
                 <input
                   name="start_time"
                   type="datetime-local"
                   required
                   defaultValue={defaultStart.toISOString().slice(0, 16)}
-                  className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 ${
-                    isConflictError
-                      ? "border-red-500 ring-red-500 focus:ring-red-500"
-                      : "border-gray-300 ring-indigo-500 focus:ring-indigo-500"
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 ${
+                    isConflictError ? "border-red-500 ring-red-500 focus:ring-red-500" : "border-slate-200 ring-blue-600 focus:ring-blue-600"
                   }`}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  End *
-                </label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">End *</label>
                 <input
                   name="end_time"
                   type="datetime-local"
                   required
                   defaultValue={defaultEnd.toISOString().slice(0, 16)}
-                  className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 ${
-                    isConflictError
-                      ? "border-red-500 ring-red-500 focus:ring-red-500"
-                      : "border-gray-300 ring-indigo-500 focus:ring-indigo-500"
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 ${
+                    isConflictError ? "border-red-500 ring-red-500 focus:ring-red-500" : "border-slate-200 ring-blue-600 focus:ring-blue-600"
                   }`}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Status
-                </label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Status</label>
                 <select
                   name="status"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
                 >
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s.value} value={s.value}>
@@ -568,41 +539,31 @@ export function VisitsPageClient({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Notes
-                </label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Notes</label>
                 <textarea
                   name="notes"
                   rows={2}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
                   placeholder="Optional notes"
                 />
               </div>
               {error ? (
-                <div
-                  className={`rounded-md px-3 py-2 text-sm ${
-                    isConflictError
-                      ? "bg-amber-50 text-amber-800 border border-amber-200"
-                      : "bg-red-50 text-red-700"
-                  }`}
-                >
-                  {isConflictError
-                    ? "⚠ Carer already has a visit during this time."
-                    : error}
+                <div className={`rounded-xl px-4 py-3 text-sm ${isConflictError ? "border border-amber-200 bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"}`}>
+                  {isConflictError ? "Carer already has a visit during this time." : error}
                 </div>
               ) : null}
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-2">
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-60"
+                  className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-60"
                 >
-                  {submitting ? "Creating..." : "Create"}
+                  {submitting ? "Creating…" : "Create"}
                 </button>
                 <button
                   type="button"
                   onClick={() => { setShowCreateModal(false); setCreateJoint(false); }}
-                  className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                 >
                   Cancel
                 </button>
@@ -615,27 +576,22 @@ export function VisitsPageClient({
       {/* Edit modal */}
       {editVisit && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={() => {
-            setEditVisit(null);
-            setError("");
-          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => { setEditVisit(null); setError(""); }}
         >
           <div
-            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-lg"
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-gray-900">Edit visit</h2>
-            <form onSubmit={handleEditSubmit} className="mt-4 space-y-4">
+            <h2 className="text-lg font-semibold text-slate-900">Edit visit</h2>
+            <form onSubmit={handleEditSubmit} className="mt-5 space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Client *
-                </label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Client *</label>
                 <select
                   name="client_id"
                   required
                   defaultValue={editVisit.client_id}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
                 >
                   {clients.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -645,29 +601,19 @@ export function VisitsPageClient({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Primary carer *
-                </label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Primary carer *</label>
                 <select
                   name="primary_carer_id"
                   required
                   defaultValue={editVisit.carer_ids?.[0] ?? editVisit.carer_id}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
                 >
                   {carers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name ?? "Unnamed"}
-                    </option>
+                    <option key={c.id} value={c.id}>{c.name ?? "Unnamed"}</option>
                   ))}
                 </select>
               </div>
-              <div
-                className={`rounded-lg border-2 p-3 transition-colors ${
-                  editJoint
-                    ? "border-violet-400 bg-violet-50"
-                    : "border-transparent"
-                }`}
-              >
+              <div className={`rounded-xl border-2 p-4 transition-colors ${editJoint ? "border-blue-200 bg-blue-50/50" : "border-slate-200"}`}>
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -675,22 +621,18 @@ export function VisitsPageClient({
                     name="joint_visit"
                     checked={editJoint}
                     onChange={(e) => setEditJoint(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <label htmlFor="edit-joint" className="text-sm font-semibold text-gray-900">
-                    👥 Joint visit (2 carers)
-                  </label>
+                  <label htmlFor="edit-joint" className="text-sm font-semibold text-slate-900">Joint visit (2 carers)</label>
                 </div>
                 {editJoint && (
                   <div className="mt-3">
-                    <label className="mb-1 block text-sm font-medium text-violet-800">
-                      Second carer *
-                    </label>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Second carer *</label>
                     <select
                       name="secondary_carer_id"
                       required
                       defaultValue={editVisit.carer_ids?.[1] ?? ""}
-                      className="w-full rounded-md border border-violet-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none ring-violet-500 focus:ring-2"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
                     >
                       <option value="">Select second carer</option>
                       {carers.map((c) => (
@@ -703,45 +645,35 @@ export function VisitsPageClient({
                 )}
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Start *
-                </label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Start *</label>
                 <input
                   name="start_time"
                   type="datetime-local"
                   required
                   defaultValue={toLocalDatetimeLocal(editVisit.start_time)}
-                  className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 ${
-                    isEditConflictError
-                      ? "border-red-500 ring-red-500 focus:ring-red-500"
-                      : "border-gray-300 ring-indigo-500 focus:ring-indigo-500"
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 ${
+                    isEditConflictError ? "border-red-500 ring-red-500 focus:ring-red-500" : "border-slate-200 ring-blue-600 focus:ring-blue-600"
                   }`}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  End *
-                </label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">End *</label>
                 <input
                   name="end_time"
                   type="datetime-local"
                   required
                   defaultValue={toLocalDatetimeLocal(editVisit.end_time)}
-                  className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 ${
-                    isEditConflictError
-                      ? "border-red-500 ring-red-500 focus:ring-red-500"
-                      : "border-gray-300 ring-indigo-500 focus:ring-indigo-500"
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 ${
+                    isEditConflictError ? "border-red-500 ring-red-500 focus:ring-red-500" : "border-slate-200 ring-blue-600 focus:ring-blue-600"
                   }`}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Status
-                </label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Status</label>
                 <select
                   name="status"
                   defaultValue={editVisit.status}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
                 >
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s.value} value={s.value}>
@@ -751,46 +683,25 @@ export function VisitsPageClient({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Notes
-                </label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Notes</label>
                 <textarea
                   name="notes"
                   rows={2}
                   defaultValue={editVisit.notes ?? ""}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
                   placeholder="Optional notes"
                 />
               </div>
               {error ? (
-                <div
-                  className={`rounded-md px-3 py-2 text-sm ${
-                    isEditConflictError
-                      ? "bg-amber-50 text-amber-800 border border-amber-200"
-                      : "bg-red-50 text-red-700"
-                  }`}
-                >
-                  {isEditConflictError
-                    ? "⚠ Carer already has a visit during this time."
-                    : error}
+                <div className={`rounded-xl px-4 py-3 text-sm ${isEditConflictError ? "border border-amber-200 bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"}`}>
+                  {isEditConflictError ? "Carer already has a visit during this time." : error}
                 </div>
               ) : null}
-              <div className="flex gap-3">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-60"
-                >
-                  {submitting ? "Saving..." : "Save"}
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={submitting} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-60">
+                  {submitting ? "Saving…" : "Save"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditVisit(null);
-                    setError("");
-                  }}
-                  className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
+                <button type="button" onClick={() => { setEditVisit(null); setError(""); }} className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
                   Cancel
                 </button>
               </div>
@@ -801,45 +712,16 @@ export function VisitsPageClient({
 
       {/* Delete confirm */}
       {deleteVisit && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={() => {
-            setDeleteVisit(null);
-            setError("");
-          }}
-        >
-          <div
-            className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-semibold text-gray-900">
-              Delete visit?
-            </h2>
-            <p className="mt-2 text-sm text-gray-600">
-              This will permanently remove the visit for {deleteVisit.client_name} with {deleteVisit.carer_name}.
-            </p>
-            {error ? (
-              <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-                {error}
-              </p>
-            ) : null}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setDeleteVisit(null); setError(""); }}>
+          <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-slate-900">Delete visit?</h2>
+            <p className="mt-2 text-sm text-slate-600">This will permanently remove the visit for {deleteVisit.client_name} with {deleteVisit.carer_name}.</p>
+            {error ? <p className="mt-3 rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p> : null}
             <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={handleDeleteConfirm}
-                disabled={submitting}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:opacity-60"
-              >
-                {submitting ? "Deleting..." : "Delete"}
+              <button type="button" onClick={handleDeleteConfirm} disabled={submitting} className="rounded-lg bg-red-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-red-500 disabled:opacity-60">
+                {submitting ? "Deleting…" : "Delete"}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDeleteVisit(null);
-                  setError("");
-                }}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
+              <button type="button" onClick={() => { setDeleteVisit(null); setError(""); }} className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
                 Cancel
               </button>
             </div>

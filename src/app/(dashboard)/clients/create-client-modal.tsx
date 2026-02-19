@@ -46,51 +46,29 @@ export function CreateClientModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-lg font-semibold text-gray-900">Add Client</h2>
-        <form action={handleSubmit} className="mt-4 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-slate-900">Add Client</h2>
+        <form action={handleSubmit} className="mt-5 space-y-4">
           <div>
-            <label
-              htmlFor="client-name"
-              className="mb-1 block text-sm font-medium text-gray-700"
-            >
-              Name *
-            </label>
+            <label htmlFor="client-name" className="mb-1.5 block text-sm font-medium text-slate-700">Name *</label>
             <input
               id="client-name"
               name="name"
               type="text"
               required
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
               placeholder="Full name"
             />
           </div>
           <div>
-            <label
-              htmlFor="client-address"
-              className="mb-1 block text-sm font-medium text-gray-700"
-            >
-              Address
-            </label>
-            <input
-              id="client-address"
-              name="address"
-              type="text"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
-              placeholder="Street address"
-            />
+            <label htmlFor="client-address" className="mb-1.5 block text-sm font-medium text-slate-700">Address</label>
+            <input id="client-address" name="address" type="text" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2" placeholder="Street address" />
           </div>
           <div>
             <label
               htmlFor="client-postcode"
-              className="mb-1 block text-sm font-medium text-gray-700"
+              className="mb-1 block text-sm font-medium text-slate-700"
             >
               Postcode
             </label>
@@ -98,14 +76,14 @@ export function CreateClientModal({
               id="client-postcode"
               name="postcode"
               type="text"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
               placeholder="Postcode"
             />
           </div>
           <div>
             <label
               htmlFor="client-notes"
-              className="mb-1 block text-sm font-medium text-gray-700"
+              className="mb-1 block text-sm font-medium text-slate-700"
             >
               Notes
             </label>
@@ -113,38 +91,38 @@ export function CreateClientModal({
               id="client-notes"
               name="notes"
               rows={3}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none ring-indigo-500 focus:ring-2"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
               placeholder="Optional notes"
             />
           </div>
-          <div className="flex items-center gap-2 rounded-lg border-2 border-amber-300 bg-amber-50 p-3">
+          <div className="flex items-center gap-2 rounded-lg border-2 border-amber-200 bg-amber-50/50 p-4">
             <input
               type="checkbox"
               id="client-double-up"
               name="requires_double_up"
-              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+              className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
             />
             <label htmlFor="client-double-up" className="text-sm font-semibold text-amber-900">
-              ⚠ Requires double-up (2 carers per visit)
+              Requires double-up (2 carers per visit)
             </label>
           </div>
           {error ? (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
             </p>
           ) : null}
           {geocodeStatus === "pending" && (
-            <p className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">
+            <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">
               Geocoding postcode…
             </p>
           )}
           {geocodeStatus === "ok" && (
-            <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
               ✓ Geocoded successfully
             </p>
           )}
           {geocodeStatus === "failed" && (
-            <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
               Geocode failed — you can geocode later from the client list
             </p>
           )}
@@ -152,14 +130,14 @@ export function CreateClientModal({
             <button
               type="submit"
               disabled={geocodeStatus === "pending"}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-60"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-60"
             >
               {geocodeStatus === "pending" ? "Saving…" : "Create"}
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
               Cancel
             </button>

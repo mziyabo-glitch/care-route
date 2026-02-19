@@ -22,10 +22,10 @@ export default async function VisitsPage() {
   const carers = Array.isArray(carersRaw) ? carersRaw : [];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-gray-900">Visits</h1>
+    <div className="space-y-8">
+      <h1 className="text-2xl font-semibold text-slate-900">Visits</h1>
       {visitsError ? (
-        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
           Error loading visits: {visitsError.message}
         </p>
       ) : null}

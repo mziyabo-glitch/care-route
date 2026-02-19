@@ -72,11 +72,11 @@ function formatDateShort(d: Date): string {
 function getStatusBadge(status: string) {
   switch (status) {
     case "completed":
-      return "bg-gray-100 text-gray-600";
+      return "bg-slate-100 text-slate-600";
     case "missed":
-      return "bg-red-100 text-red-700";
+      return "bg-red-100 text-red-600";
     default:
-      return "bg-indigo-50 text-indigo-700";
+      return "bg-blue-50 text-blue-700";
   }
 }
 
@@ -267,37 +267,37 @@ export default function RotaPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold text-gray-900">Rota</h1>
-        <div className="flex items-center gap-2">
+        <h1 className="text-2xl font-semibold text-slate-900">Rota</h1>
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={goPrev}
-            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
           >
-            ← Prev week
+            ← Prev
           </button>
-          <span className="min-w-[180px] text-center text-sm font-medium text-gray-700">
+          <span className="min-w-[200px] text-center text-sm font-medium text-slate-700">
             {formatDateShort(days[0])} – {formatDateShort(days[6])}
           </span>
           <button
             type="button"
             onClick={goNext}
-            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
           >
-            Next week →
+            Next →
           </button>
         </div>
       </div>
 
       {error ? (
-        <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
           {error}
           <button
             type="button"
             onClick={() => setError("")}
-            className="ml-2 text-xs font-medium underline"
+            className="ml-3 text-xs font-medium text-red-600 underline hover:no-underline"
           >
             Dismiss
           </button>
@@ -305,15 +305,15 @@ export default function RotaPage() {
       ) : null}
 
       {loading ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
-          <p className="mt-3 text-sm text-gray-500">Loading rota...</p>
+        <div className="rounded-xl border border-slate-200 bg-white p-16 text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          <p className="mt-4 text-sm text-slate-500">Loading rota…</p>
         </div>
       ) : (
         <>
           {/* Unassigned section */}
           {grouped.unassigned.length > 0 && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-5">
               <h2 className="mb-3 text-sm font-semibold text-amber-900">
                 Unassigned visits
               </h2>
@@ -321,16 +321,16 @@ export default function RotaPage() {
                 {grouped.unassigned.map((v) => (
                   <li
                     key={v.id}
-                    className="flex items-center gap-3 rounded-md bg-white px-3 py-2 text-sm"
+                    className="flex items-center gap-4 rounded-xl bg-white px-4 py-3 text-sm shadow-sm"
                   >
-                    <span className="font-medium text-gray-900">
+                    <span className="font-medium text-slate-900">
                       {v.client_name ?? "Unknown"}
                     </span>
-                    <span className="text-gray-500">
+                    <span className="text-slate-500">
                       {formatTime(v.start_time)}–{formatTime(v.end_time)}
                     </span>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadge(v.status)}`}
+                      className={`rounded-md px-2 py-0.5 text-xs font-medium ${getStatusBadge(v.status)}`}
                     >
                       {v.status}
                     </span>
@@ -341,41 +341,42 @@ export default function RotaPage() {
           )}
 
           {/* Legend */}
-          <div className="flex flex-wrap items-center gap-4 rounded-lg border border-gray-200 bg-white px-4 py-2 text-[11px] text-gray-600">
-            <span className="font-semibold uppercase tracking-wide text-gray-400">Key</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full bg-emerald-400" /> OK</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full bg-gray-300" /> Completed</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full bg-amber-400" /> Warning</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full bg-red-500" /> Missing 2nd carer</span>
+          <div className="flex flex-wrap items-center gap-5 rounded-xl border border-slate-200 bg-white px-5 py-3 text-xs text-slate-600 shadow-sm">
+            <span className="font-semibold uppercase tracking-wide text-slate-400">Key</span>
+            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-green-500" /> OK</span>
+            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-slate-300" /> Completed</span>
+            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-500" /> Travel tight</span>
+            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-500" /> Missing 2nd</span>
+            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-blue-500" /> Joint</span>
           </div>
 
           {/* Main grid */}
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="overflow-x-auto rounded-xl bg-slate-100/60 shadow-sm">
             <table className="min-w-[700px] border-collapse">
               <thead>
-                <tr className="sticky top-0 z-20 border-b border-gray-200 bg-gray-50">
-                  <th className="sticky left-0 z-30 min-w-[140px] border-r border-gray-200 bg-gray-50 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                <tr className="sticky top-0 z-20 border-b border-slate-200 bg-white shadow-sm">
+                  <th className="sticky left-0 z-30 min-w-[160px] border-r border-slate-200 bg-white px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                     Carer
                   </th>
                   {days.map((d) => (
                     <th
                       key={d.toISOString()}
-                      className="min-w-[100px] px-2 py-3 text-center text-xs font-semibold text-gray-600"
+                      className="min-w-[110px] px-3 py-4 text-center text-xs font-semibold text-slate-600"
                     >
                       <div>{DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1]}</div>
-                      <div className="mt-0.5 font-normal">
+                      <div className="mt-1 text-[11px] font-normal text-slate-500">
                         {formatDateShort(d)}
                       </div>
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-200/80">
                 {carers.length === 0 ? (
                   <tr>
                     <td
                       colSpan={8}
-                      className="px-4 py-12 text-center text-sm text-gray-500"
+                      className="bg-white px-6 py-16 text-center text-sm text-slate-500"
                     >
                       No carers yet. Add carers to see the rota.
                     </td>
@@ -391,38 +392,36 @@ export default function RotaPage() {
                       : `${mins}m`;
                     return (
                     <tr key={carer.id} className="group">
-                      <td className="sticky left-0 z-10 min-w-[180px] border-r border-gray-100 bg-white px-3 py-2 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.05)] group-hover:bg-gray-50">
-                        <div className="text-sm font-medium text-gray-900">{carer.name ?? "—"}</div>
+                      <td className="sticky left-0 z-10 min-w-[180px] border-r border-slate-200/80 bg-white px-4 py-3 group-hover:bg-slate-50/80">
+                        <div className="text-sm font-semibold text-slate-900">{carer.name ?? "—"}</div>
                         {hasVisits ? (
-                          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] leading-tight">
-                            <span className="font-medium text-gray-600">
-                              {stats.visitCount} visit{stats.visitCount !== 1 ? "s" : ""}
-                            </span>
-                            <span className="text-gray-300">·</span>
-                            <span className="font-medium text-gray-600">{careLabel} care</span>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-tight text-slate-500">
+                            <span>{stats.visitCount} visit{stats.visitCount !== 1 ? "s" : ""}</span>
+                            <span className="text-slate-300">·</span>
+                            <span>{careLabel} care</span>
                             {stats.travelWarnings > 0 && (
                               <>
-                                <span className="text-gray-300">·</span>
-                                <span className="font-semibold text-amber-600">
-                                  {stats.travelWarnings} travel {stats.travelWarnings === 1 ? "warning" : "warnings"}
+                                <span className="text-slate-300">·</span>
+                                <span className="font-medium text-amber-600">
+                                  {stats.travelWarnings} travel
                                 </span>
                               </>
                             )}
                             {stats.missingDoubleUp > 0 && (
                               <>
-                                <span className="text-gray-300">·</span>
-                                <span className="font-semibold text-red-600">
+                                <span className="text-slate-300">·</span>
+                                <span className="font-medium text-red-600">
                                   {stats.missingDoubleUp} missing 2nd
                                 </span>
                               </>
                             )}
-                            <span className="text-gray-300">·</span>
-                            <span className="text-gray-500">
+                            <span className="text-slate-300">·</span>
+                            <span className="text-slate-400">
                               {formatTime(stats.firstTime!)}–{formatTime(stats.lastTime!)}
                             </span>
                           </div>
                         ) : (
-                          <div className="mt-0.5 text-[10px] text-gray-400">No visits</div>
+                          <div className="mt-1 text-[11px] text-slate-400">No visits</div>
                         )}
                       </td>
                       {days.map((d) => {
@@ -432,12 +431,12 @@ export default function RotaPage() {
                         return (
                           <td
                             key={dayKey}
-                            className="min-w-[100px] align-top border-l border-gray-100 px-2 py-2"
+                            className="min-w-[110px] align-top border-l border-slate-200/60 bg-slate-50/30 px-2 py-3"
                           >
                             {cellVisits.length === 0 ? (
-                              <span className="text-xs text-gray-400">—</span>
+                              <span className="text-xs text-slate-400">—</span>
                             ) : (
-                              <div className="space-y-1.5">
+                              <div className="space-y-2">
                                 {cellVisits.map((v) => {
                                   const hasConflict = grouped.conflictIds.has(v.id);
                                   const travel = grouped.travelTightByVisit[v.id];
@@ -445,68 +444,68 @@ export default function RotaPage() {
                                   const missingSecond = !!v.missing_second_carer || (!!v.requires_double_up && !isJoint);
                                   const allClear = !missingSecond && !hasConflict && !travel && v.status !== "missed";
 
-                                  let cardBorder = "border border-gray-200";
-                                  if (missingSecond) cardBorder = "border border-red-300 border-l-[3px] border-l-red-500";
-                                  else if (hasConflict) cardBorder = "border border-red-300";
+                                  let cardBorder = "border border-slate-200/80";
+                                  if (missingSecond) cardBorder = "border border-red-200 border-l-[3px] border-l-red-500";
+                                  else if (hasConflict) cardBorder = "border border-red-200";
 
                                   return (
                                     <button
                                       key={`${v.id}-${carer.id}`}
                                       type="button"
                                       onClick={() => setSelectedVisit(v)}
-                                      className={`relative block w-full rounded-lg bg-white px-2.5 py-2 text-left text-xs transition hover:shadow-sm ${cardBorder}`}
+                                      className={`relative block w-full rounded-xl bg-white p-3 text-left text-xs shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${cardBorder}`}
                                     >
                                       {/* Time + indicator */}
-                                      <div className="flex items-center gap-1.5">
+                                      <div className="flex items-center gap-2">
                                         {missingSecond ? (
-                                          <span className="block h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                                          <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
                                         ) : v.status === "completed" ? (
-                                          <span className="block h-1.5 w-1.5 shrink-0 rounded-full bg-gray-300" />
+                                          <span className="h-2 w-2 shrink-0 rounded-full bg-slate-300" />
                                         ) : allClear ? (
-                                          <span className="block h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                                          <span className="h-2 w-2 shrink-0 rounded-full bg-green-500" />
                                         ) : (
-                                          <span className="block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+                                          <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
                                         )}
-                                        <span className="font-semibold text-gray-900">
+                                        <span className="font-semibold text-slate-900">
                                           {formatTime(v.start_time)}–{formatTime(v.end_time)}
                                         </span>
                                       </div>
                                       {/* Client */}
-                                      <div className="mt-0.5 truncate font-medium text-gray-700">
+                                      <div className="mt-1 truncate text-[11px] font-medium text-slate-700">
                                         {v.client_name ?? "Unknown"}
                                       </div>
                                       {/* With: other carer */}
                                       {v.otherCarerName && (
-                                        <div className="mt-0.5 truncate text-[10px] text-gray-500">
+                                        <div className="mt-0.5 truncate text-[10px] text-slate-500">
                                           With: {v.otherCarerName}
                                         </div>
                                       )}
                                       {/* Badge row */}
-                                      <div className="mt-1 flex flex-wrap items-center gap-1">
-                                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${getStatusBadge(v.status)}`}>
+                                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${getStatusBadge(v.status)}`}>
                                           {v.status}
                                         </span>
                                         {missingSecond && (
-                                          <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
-                                            ❗ Missing 2nd
+                                          <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                                            Missing 2nd
                                           </span>
                                         )}
                                         {travel && (
                                           <span
-                                            className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
-                                            title={`(gap ${travel.gap}m, need ~${travel.need}m)`}
+                                            className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                                            title={`Gap ${travel.gap}m, need ~${travel.need}m`}
                                           >
-                                            ⚠ Travel
+                                            Travel
                                           </span>
                                         )}
                                         {isJoint && (
-                                          <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
-                                            👥 Joint
+                                          <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                                            Joint
                                           </span>
                                         )}
                                         {hasConflict && (
-                                          <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
-                                            ⚠ Overlap
+                                          <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                                            Overlap
                                           </span>
                                         )}
                                       </div>
@@ -531,77 +530,76 @@ export default function RotaPage() {
       {/* Visit detail modal */}
       {selectedVisit && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
           onClick={() => setSelectedVisit(null)}
         >
           <div
-            className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-lg"
+            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-gray-900">
-              Visit details
-            </h2>
-            <dl className="mt-4 space-y-2 text-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Visit details</h2>
+            <dl className="mt-5 space-y-3 text-sm">
               <div>
-                <dt className="font-medium text-gray-500">Client</dt>
-                <dd className="text-gray-900">{selectedVisit.client_name ?? "—"}</dd>
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Client</dt>
+                <dd className="mt-0.5 font-medium text-slate-900">{selectedVisit.client_name ?? "—"}</dd>
               </div>
               <div>
-                <dt className="font-medium text-gray-500">Carer(s)</dt>
-                <dd className="text-gray-900">
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Carer(s)</dt>
+                <dd className="mt-0.5 font-medium text-slate-900">
                   {selectedVisit.assignments?.length
                     ? selectedVisit.assignments.map((a) => a.carer_name ?? "—").join(", ")
                     : selectedVisit.carer_name ?? "—"}
                 </dd>
               </div>
               <div>
-                <dt className="font-medium text-gray-500">Time</dt>
-                <dd className="text-gray-900">
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Time</dt>
+                <dd className="mt-0.5 font-medium text-slate-900">
                   {formatTime(selectedVisit.start_time)} – {formatTime(selectedVisit.end_time)}
-                  {" · "}
-                  {new Date(selectedVisit.start_time).toLocaleDateString(undefined, {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                  })}
+                  <span className="ml-1 text-slate-500">
+                    · {new Date(selectedVisit.start_time).toLocaleDateString(undefined, {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                    })}
+                  </span>
                 </dd>
               </div>
               <div>
-                <dt className="font-medium text-gray-500">Status</dt>
-                <dd className="flex flex-wrap items-center gap-1.5">
-                  <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${getStatusBadge(selectedVisit.status)}`}>
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</dt>
+                <dd className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${getStatusBadge(selectedVisit.status)}`}>
                     {selectedVisit.status}
                   </span>
                   {selectedVisit.is_joint && (
-                    <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                      👥 Joint
+                    <span className="rounded-md bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      Joint
                     </span>
                   )}
                   {(!!selectedVisit.missing_second_carer || (!!selectedVisit.requires_double_up && !selectedVisit.is_joint)) && (
-                    <span className="rounded-md bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
-                      ❗ Missing 2nd
+                    <span className="rounded-md bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                      Missing 2nd
                     </span>
                   )}
                 </dd>
               </div>
               {selectedVisit.notes && (
                 <div>
-                  <dt className="font-medium text-gray-500">Notes</dt>
-                  <dd className="text-gray-900">{selectedVisit.notes}</dd>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Notes</dt>
+                  <dd className="mt-0.5 text-slate-700">{selectedVisit.notes}</dd>
                 </div>
               )}
             </dl>
-            <div className="mt-6 flex gap-3">
+            <div className="mt-8 flex gap-3">
               <a
                 href="/visits"
-                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
               >
                 Edit in Visits
               </a>
               <button
                 type="button"
                 onClick={() => setSelectedVisit(null)}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Close
               </button>

@@ -5,10 +5,9 @@ import { usePathname } from "next/navigation";
 
 export function DashboardNav() {
   const pathname = usePathname();
-  const link =
-    "rounded-md px-3 py-2 text-sm font-medium transition-colors";
-  const activeLink = "bg-gray-100 text-gray-900";
-  const inactiveLink = "text-gray-600 hover:bg-gray-50 hover:text-gray-900";
+  const link = "rounded-lg px-4 py-2 text-sm font-medium transition-colors";
+  const activeLink = "bg-slate-100 text-slate-900";
+  const inactiveLink = "text-slate-600 hover:bg-slate-50 hover:text-slate-900";
 
   return (
     <nav className="flex gap-1" aria-label="Main">

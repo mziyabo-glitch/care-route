@@ -44,6 +44,22 @@ $$;
 revoke all on function public.get_client_postcode(uuid, uuid) from public;
 grant execute on function public.get_client_postcode(uuid, uuid) to authenticated;
 
+-- Ensure travel_cache has travel_minutes (in case table uses estimated_minutes from older schema)
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'travel_cache') then
+    if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'travel_cache' and column_name = 'estimated_minutes')
+       and not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'travel_cache' and column_name = 'travel_minutes') then
+      alter table public.travel_cache rename column estimated_minutes to travel_minutes;
+    elsif not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'travel_cache' and column_name = 'travel_minutes') then
+      alter table public.travel_cache add column travel_minutes integer;
+      update public.travel_cache set travel_minutes = 15 where travel_minutes is null;
+      alter table public.travel_cache alter column travel_minutes set not null;
+    end if;
+  end if;
+end
+$$;
+
 -- Lookup travel_cache entries for given agency + client pairs (bypasses RLS).
 create or replace function public.lookup_travel_cache(
   p_agency_id uuid,
