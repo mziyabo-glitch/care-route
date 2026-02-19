@@ -45,10 +45,10 @@ export async function POST(request: Request) {
     const agencyId = membership.agency_id;
 
     const { data: client, error: clientError } = await supabase
-      .from("clients")
-      .select("id, agency_id")
-      .eq("id", client_id)
-      .eq("agency_id", agencyId)
+      .rpc("get_client_postcode", {
+        p_client_id: client_id,
+        p_agency_id: agencyId,
+      })
       .maybeSingle();
 
     if (clientError) {
@@ -100,10 +100,15 @@ export async function POST(request: Request) {
       });
     }
 
-    const { error: updateError } = await supabase
-      .from("clients")
-      .update({ latitude, longitude })
-      .eq("id", client_id);
+    const { data: updated, error: updateError } = await supabase.rpc(
+      "update_client_geocode",
+      {
+        p_client_id: client_id,
+        p_agency_id: agencyId,
+        p_latitude: latitude,
+        p_longitude: longitude,
+      }
+    );
 
     if (updateError) {
       return NextResponse.json({
@@ -112,12 +117,15 @@ export async function POST(request: Request) {
       });
     }
 
-    // Invalidate travel_cache entries involving this client
-    await supabase
-      .from("travel_cache")
-      .delete()
-      .eq("agency_id", agencyId)
-      .or(`from_client_id.eq.${client_id},to_client_id.eq.${client_id}`);
+    if (!updated) {
+      return NextResponse.json({
+        ok: false,
+        error: "Client update returned no rows",
+      });
+    }
+
+    // No need to invalidate travel_cache — first-time geocodes won't have
+    // Haversine-based cache entries yet. Future re-geocodes can add invalidation.
 
     return NextResponse.json({ ok: true, latitude, longitude });
   } catch (err) {
