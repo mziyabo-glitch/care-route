@@ -21,6 +21,36 @@ export function ClientsList({ clients }: { clients: Client[] }) {
   const [archiveClient, setArchiveClient] = useState<Client | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [geocoding, setGeocoding] = useState<Record<string, "pending" | "ok" | "failed">>({});
+  const [geocodingAll, setGeocodingAll] = useState(false);
+
+  const ungeocodedClients = clients.filter(
+    (c) => c.postcode && (c.latitude == null || c.longitude == null)
+  );
+
+  async function geocodeClient(clientId: string, postcode: string) {
+    setGeocoding((prev) => ({ ...prev, [clientId]: "pending" }));
+    try {
+      const res = await fetch("/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: clientId, postcode }),
+      });
+      const data = await res.json();
+      setGeocoding((prev) => ({ ...prev, [clientId]: data.ok ? "ok" : "failed" }));
+    } catch {
+      setGeocoding((prev) => ({ ...prev, [clientId]: "failed" }));
+    }
+  }
+
+  async function geocodeAll() {
+    setGeocodingAll(true);
+    for (const c of ungeocodedClients) {
+      await geocodeClient(c.id, c.postcode!);
+    }
+    setGeocodingAll(false);
+    router.refresh();
+  }
 
   async function handleArchiveConfirm() {
     if (!archiveClient) return;
@@ -42,7 +72,7 @@ export function ClientsList({ clients }: { clients: Client[] }) {
   return (
     <>
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-4 py-3">
           <button
             type="button"
             onClick={() => setShowModal(true)}
@@ -50,6 +80,18 @@ export function ClientsList({ clients }: { clients: Client[] }) {
           >
             Add Client
           </button>
+          {ungeocodedClients.length > 0 && (
+            <button
+              type="button"
+              onClick={geocodeAll}
+              disabled={geocodingAll}
+              className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60"
+            >
+              {geocodingAll
+                ? `Geocoding ${Object.values(geocoding).filter((s) => s === "pending").length > 0 ? "..." : "done"}`
+                : `Geocode all (${ungeocodedClients.length})`}
+            </button>
+          )}
         </div>
         {error ? (
           <div className="border-b border-red-200 bg-red-50 px-4 py-3">
@@ -79,15 +121,35 @@ export function ClientsList({ clients }: { clients: Client[] }) {
                         ⚠ Double-up
                       </span>
                     )}
-                    {c.postcode && c.latitude != null && c.longitude != null && (
+                    {c.postcode && (c.latitude != null && c.longitude != null || geocoding[c.id] === "ok") && (
                       <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-                        Geocoded
+                        ✓ Geocoded
                       </span>
                     )}
-                    {c.postcode && (c.latitude == null || c.longitude == null) && (
-                      <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
-                        Not geocoded
-                      </span>
+                    {c.postcode && c.latitude == null && c.longitude == null && geocoding[c.id] !== "ok" && (
+                      <>
+                        {geocoding[c.id] === "pending" ? (
+                          <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
+                            Geocoding…
+                          </span>
+                        ) : geocoding[c.id] === "failed" ? (
+                          <button
+                            type="button"
+                            onClick={() => geocodeClient(c.id, c.postcode!)}
+                            className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600 hover:bg-red-100"
+                          >
+                            ✗ Retry geocode
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => geocodeClient(c.id, c.postcode!)}
+                            className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 hover:bg-gray-200"
+                          >
+                            Geocode
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                   {(c.address || c.postcode) && (

@@ -34,8 +34,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  // Call Postcodes.io
-  const encoded = encodeURIComponent(postcode.trim());
+  // Normalize: uppercase, strip spaces, re-insert space before last 3 chars (UK postcode format)
+  const raw = postcode.trim().replace(/\s+/g, "").toUpperCase();
+  const normalized = raw.length >= 5
+    ? raw.slice(0, -3) + " " + raw.slice(-3)
+    : raw;
+
+  const encoded = encodeURIComponent(normalized);
   let latitude: number | null = null;
   let longitude: number | null = null;
 
