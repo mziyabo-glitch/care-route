@@ -11,6 +11,8 @@ type Client = {
   postcode: string | null;
   notes: string | null;
   requires_double_up?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export function ClientsList({ clients }: { clients: Client[] }) {
@@ -75,6 +77,16 @@ export function ClientsList({ clients }: { clients: Client[] }) {
                     {c.requires_double_up && (
                       <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-800">
                         ⚠ Double-up
+                      </span>
+                    )}
+                    {c.postcode && c.latitude != null && c.longitude != null && (
+                      <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                        Geocoded
+                      </span>
+                    )}
+                    {c.postcode && (c.latitude == null || c.longitude == null) && (
+                      <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+                        Not geocoded
                       </span>
                     )}
                   </div>

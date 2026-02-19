@@ -20,6 +20,8 @@ export default async function ClientsPage() {
     postcode: string | null;
     notes: string | null;
     requires_double_up?: boolean;
+    latitude?: number | null;
+    longitude?: number | null;
   };
 
   const clients: ClientRow[] = Array.isArray(raw) ? raw : [];

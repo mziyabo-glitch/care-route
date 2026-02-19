@@ -134,6 +134,59 @@ begin
 end;
 $$;
 
+-- Update list_clients to include lat/lng
+create or replace function public.list_clients(p_agency_id uuid)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare v_user_id uuid; v_rows jsonb;
+begin
+  v_user_id := auth.uid();
+  if v_user_id is null then raise exception 'Not authenticated'; end if;
+  if not exists (select 1 from public.agency_members where user_id = v_user_id and agency_id = p_agency_id) then
+    raise exception 'Not authorized for this agency';
+  end if;
+  select coalesce(jsonb_agg(
+    jsonb_build_object(
+      'id', c.id,
+      'name', coalesce(c.full_name, c.name),
+      'address', c.address,
+      'postcode', c.postcode,
+      'notes', c.notes,
+      'requires_double_up', c.requires_double_up,
+      'latitude', c.latitude,
+      'longitude', c.longitude
+    ) order by coalesce(c.full_name, c.name)
+  ), '[]'::jsonb)
+  into v_rows
+  from public.clients c
+  where c.agency_id = p_agency_id and c.deleted_at is null;
+  return v_rows;
+end;
+$$;
+
+-- Allow authenticated users to update client lat/lng (for geocoding)
+drop policy if exists "clients_update_member" on public.clients;
+create policy "clients_update_member" on public.clients
+for update to authenticated
+using (exists (
+  select 1 from public.agency_members am
+  where am.agency_id = clients.agency_id and am.user_id = auth.uid()
+))
+with check (exists (
+  select 1 from public.agency_members am
+  where am.agency_id = clients.agency_id and am.user_id = auth.uid()
+));
+
+-- Allow delete on travel_cache for cache invalidation
+drop policy if exists "travel_cache_delete_member" on public.travel_cache;
+create policy "travel_cache_delete_member" on public.travel_cache
+for delete to authenticated
+using (exists (
+  select 1 from public.agency_members am
+  where am.agency_id = travel_cache.agency_id and am.user_id = auth.uid()
+));
+
 -- RPC: upsert travel cache (called from API)
 create or replace function public.upsert_travel_cache(
   p_agency_id uuid,

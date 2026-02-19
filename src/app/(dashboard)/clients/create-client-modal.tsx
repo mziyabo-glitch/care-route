@@ -11,14 +11,36 @@ export function CreateClientModal({
 }) {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [geocodeStatus, setGeocodeStatus] = useState<"idle" | "pending" | "ok" | "failed">("idle");
 
   async function handleSubmit(formData: FormData) {
     setError("");
+    setGeocodeStatus("idle");
     const result = await createClientAction(formData);
     if (result.error) {
       setError(result.error);
       return;
     }
+
+    // Geocode postcode in background after successful save
+    if (result.clientId && result.postcode) {
+      setGeocodeStatus("pending");
+      try {
+        const res = await fetch("/api/geocode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_id: result.clientId,
+            postcode: result.postcode,
+          }),
+        });
+        const data = await res.json();
+        setGeocodeStatus(data.ok ? "ok" : "failed");
+      } catch {
+        setGeocodeStatus("failed");
+      }
+    }
+
     onClose();
     router.refresh();
   }

@@ -1,44 +1,4 @@
-const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
-
 export type LatLng = { lat: number; lng: number };
-
-/**
- * Geocode a UK postcode using OpenStreetMap Nominatim (free, 1 req/sec).
- * Only called on client create/update — never per render.
- */
-export async function geocodePostcode(
-  postcode: string
-): Promise<LatLng | null> {
-  const cleaned = postcode.trim().toUpperCase();
-  if (!cleaned) return null;
-
-  try {
-    const params = new URLSearchParams({
-      q: cleaned,
-      countrycodes: "gb",
-      format: "json",
-      limit: "1",
-    });
-    const res = await fetch(`${NOMINATIM_URL}?${params}`, {
-      headers: { "User-Agent": "CareRoute/1.0" },
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (!res.ok) return null;
-
-    const results = await res.json();
-    if (!Array.isArray(results) || results.length === 0) return null;
-
-    const { lat, lon } = results[0];
-    const parsedLat = parseFloat(lat);
-    const parsedLng = parseFloat(lon);
-    if (isNaN(parsedLat) || isNaN(parsedLng)) return null;
-
-    return { lat: parsedLat, lng: parsedLng };
-  } catch {
-    return null;
-  }
-}
 
 const DEG_TO_RAD = Math.PI / 180;
 const EARTH_RADIUS_KM = 6371;
