@@ -335,6 +335,15 @@ export default function RotaPage() {
             </div>
           )}
 
+          {/* Legend */}
+          <div className="flex flex-wrap items-center gap-4 rounded-lg border border-gray-200 bg-white px-4 py-2 text-[11px] text-gray-600">
+            <span className="font-semibold uppercase tracking-wide text-gray-400">Key</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full bg-emerald-400" /> OK</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full bg-gray-300" /> Completed</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full bg-amber-400" /> Warning</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full bg-red-500" /> Missing 2nd carer</span>
+          </div>
+
           {/* Main grid */}
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
             <table className="min-w-[700px] border-collapse">
