@@ -138,7 +138,6 @@ export async function GET(request: Request) {
       }
     }
 
-    const upsertPromises: Promise<unknown>[] = [];
     for (const pair of missingPairs) {
       const a = clientLatLng[pair.fromId];
       const b = clientLatLng[pair.toId];
@@ -146,26 +145,20 @@ export async function GET(request: Request) {
 
       if (geo) {
         travelTimes[pair.key] = geo.minutes;
-        upsertPromises.push(
-          supabase.rpc("upsert_travel_cache", {
-            p_agency_id: agencyId,
-            p_from_client_id: pair.fromId,
-            p_to_client_id: pair.toId,
-            p_distance_km: geo.distanceKm,
-            p_travel_minutes: geo.minutes,
-          })
-        );
+        // Fire-and-forget cache write (don't await, don't block response)
+        supabase.rpc("upsert_travel_cache", {
+          p_agency_id: agencyId,
+          p_from_client_id: pair.fromId,
+          p_to_client_id: pair.toId,
+          p_distance_km: geo.distanceKm,
+          p_travel_minutes: geo.minutes,
+        }).then(() => {}, () => {});
       } else {
         travelTimes[pair.key] = estimateTravelFromPostcodes(
           a?.postcode,
           b?.postcode
         );
       }
-    }
-
-    // Fire cache writes without blocking response
-    if (upsertPromises.length > 0) {
-      Promise.all(upsertPromises).catch(() => {});
     }
   }
 
