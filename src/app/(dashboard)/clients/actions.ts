@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentAgencyId } from "@/lib/agency";
 import { revalidatePath } from "next/cache";
+import { geocodePostcode } from "@/lib/geo";
 
 export async function createClientAction(formData: FormData) {
   const supabase = await createClient();
@@ -21,6 +22,16 @@ export async function createClientAction(formData: FormData) {
     return { error: "Name is required." };
   }
 
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+  if (postcode) {
+    const geo = await geocodePostcode(postcode);
+    if (geo) {
+      latitude = geo.lat;
+      longitude = geo.lng;
+    }
+  }
+
   const { error } = await supabase.rpc("insert_client", {
     p_agency_id: agencyId,
     p_name: name,
@@ -28,6 +39,8 @@ export async function createClientAction(formData: FormData) {
     p_postcode: postcode,
     p_notes: notes,
     p_requires_double_up: requiresDoubleUp,
+    p_latitude: latitude,
+    p_longitude: longitude,
   });
 
   if (error) {

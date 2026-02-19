@@ -18,6 +18,8 @@ type Visit = {
   client_name: string | null;
   carer_name: string | null;
   client_postcode?: string | null;
+  client_lat?: number | null;
+  client_lng?: number | null;
   start_time: string;
   end_time: string;
   status: string;
@@ -78,8 +80,8 @@ function getStatusBadge(status: string) {
   }
 }
 
-/** Estimate travel minutes between two UK postcodes (outward code heuristic, no external API) */
-function estimateTravelMinutes(postcodeA: string | null | undefined, postcodeB: string | null | undefined): number {
+/** Postcode heuristic fallback when no geolocation or server cache available */
+function estimateTravelFallback(postcodeA: string | null | undefined, postcodeB: string | null | undefined): number {
   const a = (postcodeA ?? "").toUpperCase().trim();
   const b = (postcodeB ?? "").toUpperCase().trim();
   if (!a || !b) return 15;
@@ -105,6 +107,7 @@ export default function RotaPage() {
 
   const [carers, setCarers] = useState<Carer[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
+  const [serverTravelTimes, setServerTravelTimes] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedVisit, setSelectedVisit] = useState<VisitWithContext | null>(null);
@@ -130,6 +133,7 @@ export default function RotaPage() {
       }
       setCarers(data.carers ?? []);
       setVisits(data.visits ?? []);
+      setServerTravelTimes(data.travelTimes ?? {});
     } catch (e) {
       setError("Failed to load rota");
     } finally {
@@ -203,10 +207,11 @@ export default function RotaPage() {
             conflictIds.add(prev.id);
             conflictIds.add(curr.id);
           }
-          // Travel gap: gap < need + 5 buffer => tight
+          // Travel gap: use server-computed times → fallback to postcode heuristic
           const gapMs = new Date(curr.start_time).getTime() - new Date(prev.end_time).getTime();
           const gap = Math.round(gapMs / 60000);
-          const need = estimateTravelMinutes(prev.client_postcode, curr.client_postcode) + 5;
+          const pairKey = `${prev.client_id}|${curr.client_id}`;
+          const need = serverTravelTimes[pairKey] ?? estimateTravelFallback(prev.client_postcode, curr.client_postcode);
           if (gap < need && gap >= 0) {
             travelTightByVisit[curr.id] = { gap, need };
           }
@@ -245,7 +250,7 @@ export default function RotaPage() {
     }
 
     return { byCarerDay, unassigned, conflictIds, travelTightByVisit, carerStats };
-  }, [visits, carers]);
+  }, [visits, carers, serverTravelTimes]);
 
   const goPrev = () => {
     const prev = new Date(weekStart);
