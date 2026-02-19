@@ -112,11 +112,11 @@ export function VisitsPageClient({
   function getStatusBadgeClass(status: string) {
     switch (status) {
       case "completed":
-        return "bg-green-100 text-green-800";
+        return "bg-gray-100 text-gray-600";
       case "missed":
-        return "bg-red-100 text-red-800";
+        return "bg-red-100 text-red-700";
       default:
-        return "bg-indigo-100 text-indigo-800";
+        return "bg-indigo-50 text-indigo-700";
     }
   }
 
@@ -317,89 +317,112 @@ export function VisitsPageClient({
                     <span className="ml-2 text-gray-400">({group.visits.length})</span>
                   </h3>
                 </div>
-                <ul className="divide-y divide-gray-200">
+                <ul className="divide-y divide-gray-100">
                   {group.visits.map((v) => {
                     const isJoint = !!v.is_joint || (Array.isArray(v.carer_ids) && v.carer_ids.length >= 2) || ((v.assignments?.length ?? 0) >= 2);
                     const missingSecond = !!v.missing_second_carer || (!!v.requires_double_up && !isJoint);
-                    const leftBorder = missingSecond
-                      ? "border-l-4 border-l-red-500 bg-red-50/40"
-                      : isJoint
-                        ? "border-l-4 border-l-violet-500 bg-violet-50/50"
-                        : "";
+                    const allClear = !missingSecond && v.status !== "missed";
                     return (
-                    <li key={v.id} className={`px-4 py-4 ${leftBorder}`}>
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
+                    <li
+                      key={v.id}
+                      className={`flex items-start gap-3 px-4 py-3 ${missingSecond ? "border-l-[3px] border-l-red-500 bg-red-50/30" : ""}`}
+                    >
+                      {/* Indicator dot */}
+                      <div className="mt-1.5 shrink-0">
+                        {missingSecond ? (
+                          <span className="block h-2 w-2 rounded-full bg-red-500" />
+                        ) : v.status === "completed" ? (
+                          <span className="block h-2 w-2 rounded-full bg-gray-300" />
+                        ) : allClear ? (
+                          <span className="block h-2 w-2 rounded-full bg-emerald-400" />
+                        ) : (
+                          <span className="block h-2 w-2 rounded-full bg-amber-400" />
+                        )}
+                      </div>
+                      {/* Content */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-900">
+                            {v.client_name ?? "Unknown"}
+                          </span>
+                          <span className="text-gray-400">→</span>
+                          <span className="truncate text-sm text-gray-700">
+                            {v.assignments?.map((a) => a.carer_name ?? "Unknown").join(" + ") ?? v.carer_name ?? "Unknown"}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-xs text-gray-500">
+                          {formatDateTime(v.start_time)} – {formatDateTime(v.end_time)}
+                        </div>
+                        {v.notes && (
+                          <div className="mt-0.5 text-xs text-gray-500">{v.notes}</div>
+                        )}
+                        {/* Badge row */}
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <span className={`inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${getStatusBadgeClass(v.status)}`}>
+                            {v.status}
+                          </span>
                           {missingSecond && (
-                            <div className="mb-1 inline-flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                              <span>❗</span> Missing 2nd carer
-                            </div>
+                            <span className="inline-flex items-center gap-0.5 rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
+                              ❗ Missing 2nd
+                            </span>
                           )}
-                          {isJoint && !missingSecond && (
-                            <div className="mb-1 inline-flex items-center gap-1 rounded bg-violet-700 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                              <span>👥</span> Joint visit
-                            </div>
-                          )}
-                          <div className="font-medium text-gray-900">
-                            {v.client_name ?? "Unknown"} → {v.assignments?.map((a) => a.carer_name ?? "Unknown").join(" + ") ?? v.carer_name ?? "Unknown"}
-                          </div>
-                          <div className="mt-1 text-sm text-gray-500">
-                            {formatDateTime(v.start_time)} – {formatDateTime(v.end_time)}
-                          </div>
-                          {v.notes && (
-                            <div className="mt-1 text-sm text-gray-600">{v.notes}</div>
+                          {isJoint && (
+                            <span className="inline-flex items-center gap-0.5 rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                              👥 Joint
+                            </span>
                           )}
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {missingSecond && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setError("");
-                                setEditVisit(v);
-                                setEditJoint(true);
-                              }}
-                              className="rounded-md bg-red-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-red-500"
-                            >
-                              + Assign 2nd
-                            </button>
-                          )}
-                          <select
-                            value={v.status}
-                            onChange={(e) => handleStatusChange(v, e.target.value)}
-                            disabled={submitting}
-                            className={`rounded-full px-2 py-1 text-xs font-medium outline-none ring-indigo-500 focus:ring-2 disabled:opacity-60 ${getStatusBadgeClass(v.status)}`}
-                          >
-                            {STATUS_OPTIONS.map((s) => (
-                              <option key={s.value} value={s.value}>
-                                {s.label}
-                              </option>
-                            ))}
-                          </select>
+                      </div>
+                      {/* Actions */}
+                      <div className="flex shrink-0 items-center gap-2">
+                        {missingSecond && (
                           <button
                             type="button"
                             onClick={() => {
                               setError("");
                               setEditVisit(v);
-                              setEditJoint(!!v.is_joint);
+                              setEditJoint(true);
                             }}
-                            className="text-sm font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-60"
-                            disabled={submitting}
+                            className="rounded-md bg-red-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-red-500"
                           >
-                            Edit
+                            + Assign 2nd
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setError("");
-                              setDeleteVisit(v);
-                            }}
-                            className="text-sm font-medium text-red-600 hover:text-red-500 disabled:opacity-60"
-                            disabled={submitting}
-                          >
-                            Delete
-                          </button>
-                        </div>
+                        )}
+                        <select
+                          value={v.status}
+                          onChange={(e) => handleStatusChange(v, e.target.value)}
+                          disabled={submitting}
+                          className={`rounded-md px-2 py-1 text-[11px] font-medium outline-none ring-indigo-500 focus:ring-2 disabled:opacity-60 ${getStatusBadgeClass(v.status)}`}
+                        >
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s.value} value={s.value}>
+                              {s.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setError("");
+                            setEditVisit(v);
+                            setEditJoint(!!v.is_joint);
+                          }}
+                          className="text-xs font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-60"
+                          disabled={submitting}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setError("");
+                            setDeleteVisit(v);
+                          }}
+                          className="text-xs font-medium text-red-600 hover:text-red-500 disabled:opacity-60"
+                          disabled={submitting}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </li>
                     );

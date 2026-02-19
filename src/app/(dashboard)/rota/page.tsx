@@ -70,11 +70,11 @@ function formatDateShort(d: Date): string {
 function getStatusBadge(status: string) {
   switch (status) {
     case "completed":
-      return "bg-green-100 text-green-800";
+      return "bg-gray-100 text-gray-600";
     case "missed":
-      return "bg-red-100 text-red-800";
+      return "bg-red-100 text-red-700";
     default:
-      return "bg-indigo-100 text-indigo-800";
+      return "bg-indigo-50 text-indigo-700";
   }
 }
 
@@ -423,74 +423,76 @@ export default function RotaPage() {
                             {cellVisits.length === 0 ? (
                               <span className="text-xs text-gray-400">—</span>
                             ) : (
-                              <div className="space-y-2">
+                              <div className="space-y-1.5">
                                 {cellVisits.map((v) => {
                                   const hasConflict = grouped.conflictIds.has(v.id);
                                   const travel = grouped.travelTightByVisit[v.id];
-                                  const travelRatio = travel ? travel.gap / travel.need : 1;
                                   const isJoint = !!v.is_joint;
                                   const missingSecond = !!v.missing_second_carer || (!!v.requires_double_up && !isJoint);
+                                  const allClear = !missingSecond && !hasConflict && !travel && v.status !== "missed";
 
-                                  const normalCard = "border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50";
-                                  const jointCard = "border-l-4 border-l-violet-600 border-y border-r border-y-violet-300 border-r-violet-300 bg-violet-50 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.15)] hover:bg-violet-100";
-                                  const conflictCard = "border-red-500 bg-red-50 hover:border-red-600 hover:bg-red-100";
-                                  const conflictJointCard = "border-l-4 border-l-violet-600 border-y border-r border-y-red-400 border-r-red-400 bg-red-50 hover:bg-red-100";
-                                  const missingCard = "border-l-4 border-l-red-500 border-y border-r border-y-red-300 border-r-red-300 bg-red-50 ring-1 ring-red-200 hover:bg-red-100";
-                                  let cardClass = normalCard;
-                                  if (missingSecond) cardClass = missingCard;
-                                  else if (hasConflict && isJoint) cardClass = conflictJointCard;
-                                  else if (hasConflict) cardClass = conflictCard;
-                                  else if (isJoint) cardClass = jointCard;
+                                  let cardBorder = "border border-gray-200";
+                                  if (missingSecond) cardBorder = "border border-red-300 border-l-[3px] border-l-red-500";
+                                  else if (hasConflict) cardBorder = "border border-red-300";
+
                                   return (
                                     <button
                                       key={`${v.id}-${carer.id}`}
                                       type="button"
                                       onClick={() => setSelectedVisit(v)}
-                                      className={`relative block w-full rounded-md px-2 py-1.5 text-left text-xs transition ${cardClass}`}
+                                      className={`relative block w-full rounded-lg bg-white px-2.5 py-2 text-left text-xs transition hover:shadow-sm ${cardBorder}`}
                                     >
-                                      {missingSecond && (
-                                        <div className="mb-1 flex items-center gap-1.5 rounded bg-red-600 px-1.5 py-[3px] text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
-                                          <span className="text-sm leading-none">❗</span>
-                                          <span>Missing 2nd carer</span>
-                                        </div>
-                                      )}
-                                      {isJoint && !missingSecond && (
-                                        <div className="mb-1 flex items-center gap-1.5 rounded bg-violet-700 px-1.5 py-[3px] text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
-                                          <span className="text-sm leading-none">👥</span>
-                                          <span>Joint visit</span>
-                                        </div>
-                                      )}
-                                      <div className="flex items-center gap-1 font-medium text-gray-900">
-                                        {hasConflict && (
-                                          <span className="text-red-600" title="Overlap">
-                                            ⚠
-                                          </span>
+                                      {/* Time + indicator */}
+                                      <div className="flex items-center gap-1.5">
+                                        {missingSecond ? (
+                                          <span className="block h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                                        ) : v.status === "completed" ? (
+                                          <span className="block h-1.5 w-1.5 shrink-0 rounded-full bg-gray-300" />
+                                        ) : allClear ? (
+                                          <span className="block h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                                        ) : (
+                                          <span className="block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
                                         )}
-                                        {formatTime(v.start_time)}–
-                                        {formatTime(v.end_time)}
+                                        <span className="font-semibold text-gray-900">
+                                          {formatTime(v.start_time)}–{formatTime(v.end_time)}
+                                        </span>
                                       </div>
-                                      <div className={isJoint || missingSecond ? "font-medium text-gray-900" : "text-gray-600"}>
+                                      {/* Client */}
+                                      <div className="mt-0.5 truncate font-medium text-gray-700">
                                         {v.client_name ?? "Unknown"}
                                       </div>
+                                      {/* With: other carer */}
                                       {v.otherCarerName && (
-                                        <div className="mt-0.5 rounded bg-violet-200 px-1.5 py-0.5 text-[10px] font-semibold text-violet-900">
+                                        <div className="mt-0.5 truncate text-[10px] text-gray-500">
                                           With: {v.otherCarerName}
                                         </div>
                                       )}
+                                      {/* Badge row */}
                                       <div className="mt-1 flex flex-wrap items-center gap-1">
-                                        <span
-                                          className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${getStatusBadge(v.status)}`}
-                                        >
+                                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${getStatusBadge(v.status)}`}>
                                           {v.status}
                                         </span>
+                                        {missingSecond && (
+                                          <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
+                                            ❗ Missing 2nd
+                                          </span>
+                                        )}
                                         {travel && (
                                           <span
-                                            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                              travelRatio < 0.5 ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"
-                                            }`}
+                                            className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
                                             title={`(gap ${travel.gap}m, need ~${travel.need}m)`}
                                           >
-                                            ⚠ Tight travel
+                                            ⚠ Travel
+                                          </span>
+                                        )}
+                                        {isJoint && (
+                                          <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                                            👥 Joint
+                                          </span>
+                                        )}
+                                        {hasConflict && (
+                                          <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
+                                            ⚠ Overlap
                                           </span>
                                         )}
                                       </div>
@@ -552,20 +554,18 @@ export default function RotaPage() {
               </div>
               <div>
                 <dt className="font-medium text-gray-500">Status</dt>
-                <dd className="flex flex-wrap items-center gap-1">
-                  <span
-                    className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadge(selectedVisit.status)}`}
-                  >
+                <dd className="flex flex-wrap items-center gap-1.5">
+                  <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${getStatusBadge(selectedVisit.status)}`}>
                     {selectedVisit.status}
                   </span>
                   {selectedVisit.is_joint && (
-                    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">
-                      👥 Joint visit
+                    <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                      👥 Joint
                     </span>
                   )}
                   {(!!selectedVisit.missing_second_carer || (!!selectedVisit.requires_double_up && !selectedVisit.is_joint)) && (
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
-                      ❗ Missing 2nd carer
+                    <span className="rounded-md bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                      ❗ Missing 2nd
                     </span>
                   )}
                 </dd>
