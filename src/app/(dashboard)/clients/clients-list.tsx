@@ -22,14 +22,16 @@ export function ClientsList({ clients }: { clients: Client[] }) {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [geocoding, setGeocoding] = useState<Record<string, "pending" | "ok" | "failed">>({});
+  const [geocodeErrors, setGeocodeErrors] = useState<Record<string, string>>({});
   const [geocodingAll, setGeocodingAll] = useState(false);
 
   const ungeocodedClients = clients.filter(
-    (c) => c.postcode && (c.latitude == null || c.longitude == null)
+    (c) => c.postcode && (c.latitude == null || c.longitude == null) && geocoding[c.id] !== "ok"
   );
 
   async function geocodeClient(clientId: string, postcode: string) {
     setGeocoding((prev) => ({ ...prev, [clientId]: "pending" }));
+    setGeocodeErrors((prev) => { const n = { ...prev }; delete n[clientId]; return n; });
     try {
       const res = await fetch("/api/geocode", {
         method: "POST",
@@ -37,9 +39,15 @@ export function ClientsList({ clients }: { clients: Client[] }) {
         body: JSON.stringify({ client_id: clientId, postcode }),
       });
       const data = await res.json();
-      setGeocoding((prev) => ({ ...prev, [clientId]: data.ok ? "ok" : "failed" }));
-    } catch {
+      if (data.ok) {
+        setGeocoding((prev) => ({ ...prev, [clientId]: "ok" }));
+      } else {
+        setGeocoding((prev) => ({ ...prev, [clientId]: "failed" }));
+        setGeocodeErrors((prev) => ({ ...prev, [clientId]: data.error || `HTTP ${res.status}` }));
+      }
+    } catch (err) {
       setGeocoding((prev) => ({ ...prev, [clientId]: "failed" }));
+      setGeocodeErrors((prev) => ({ ...prev, [clientId]: err instanceof Error ? err.message : "Network error" }));
     }
   }
 
@@ -133,13 +141,18 @@ export function ClientsList({ clients }: { clients: Client[] }) {
                             Geocoding…
                           </span>
                         ) : geocoding[c.id] === "failed" ? (
-                          <button
-                            type="button"
-                            onClick={() => geocodeClient(c.id, c.postcode!)}
-                            className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600 hover:bg-red-100"
-                          >
-                            ✗ Retry geocode
-                          </button>
+                          <span className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => geocodeClient(c.id, c.postcode!)}
+                              className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600 hover:bg-red-100"
+                            >
+                              ✗ Retry
+                            </button>
+                            {geocodeErrors[c.id] && (
+                              <span className="text-[10px] text-red-500">{geocodeErrors[c.id]}</span>
+                            )}
+                          </span>
                         ) : (
                           <button
                             type="button"
