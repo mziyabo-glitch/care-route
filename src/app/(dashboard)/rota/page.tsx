@@ -744,12 +744,12 @@ export default function RotaPage() {
 
       {/* Review & Apply panel (right-side) */}
       {selectedSuggestion && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setSelectedSuggestion(null)} />
-          <div className="relative z-10 w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white shadow-xl">
+        <div className="fixed inset-0 z-[100] flex" role="dialog" aria-modal aria-labelledby="review-panel-title">
+          <div className="flex-1 bg-black/50" onClick={() => setSelectedSuggestion(null)} aria-hidden />
+          <div className="w-full max-w-md shrink-0 overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
             <div className="sticky top-0 border-b border-slate-200 bg-white px-5 py-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-900">Review swap</h2>
+                <h2 id="review-panel-title" className="text-lg font-semibold text-slate-900">Review swap</h2>
                 <button
                   type="button"
                   onClick={() => setSelectedSuggestion(null)}
@@ -887,7 +887,7 @@ export default function RotaPage() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+        <div className="fixed bottom-6 right-6 z-[100] flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg ring-2 ring-slate-200/80">
           <span className="text-sm text-slate-700">{toast.message}</span>
           {toast.undo && (
             <button
