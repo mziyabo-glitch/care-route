@@ -140,6 +140,10 @@ export default function RotaPage() {
   const [selectedDays, setSelectedDays] = useState<Set<string>>(() => new Set());
   const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
   const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
+  const [selectedSuggestion, setSelectedSuggestion] = useState<ReorderSuggestion | null>(null);
+  const [applyLoading, setApplyLoading] = useState(false);
+  const [panelError, setPanelError] = useState("");
+  const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null);
 
   const toggleDaySelection = useCallback((dayKey: string) => {
     setSelectedDays((prev) => {
@@ -347,6 +351,47 @@ export default function RotaPage() {
     return out;
   }, [grouped.byCarerDay, carers, serverTravelTimes]);
 
+  const handleApplySwap = useCallback(async () => {
+    if (!selectedSuggestion) return;
+    setApplyLoading(true);
+    setPanelError("");
+    try {
+      const res = await fetch("/api/rota/swap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          visitAId: selectedSuggestion.visitA.id,
+          visitBId: selectedSuggestion.visitB.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPanelError(data.error ?? "Failed to apply swap");
+        return;
+      }
+      const visitAId = selectedSuggestion.visitA.id;
+      const visitBId = selectedSuggestion.visitB.id;
+      setSelectedSuggestion(null);
+      await fetchData();
+      setToast({
+        message: "Times swapped successfully.",
+        undo: async () => {
+          const r = await fetch("/api/rota/swap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ visitAId, visitBId }),
+          });
+          if (r.ok) await fetchData();
+          setToast(null);
+        },
+      });
+    } catch (e) {
+      setPanelError("Failed to apply swap");
+    } finally {
+      setApplyLoading(false);
+    }
+  }, [selectedSuggestion, fetchData]);
+
   const goPrev = () => {
     const prev = new Date(weekStart);
     prev.setDate(prev.getDate() - 7);
@@ -453,6 +498,8 @@ export default function RotaPage() {
                       <button
                         type="button"
                         onClick={() => {
+                          setSelectedSuggestion(s);
+                          setPanelError("");
                           document.getElementById(`rota-cell-${s.carerId}-${s.dayKey}`)?.scrollIntoView({ behavior: "smooth" });
                         }}
                         className="shrink-0 rounded-lg bg-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-200"
@@ -693,6 +740,172 @@ export default function RotaPage() {
             </table>
           </div>
         </>
+      )}
+
+      {/* Review & Apply panel (right-side) */}
+      {selectedSuggestion && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setSelectedSuggestion(null)} />
+          <div className="relative z-10 w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white shadow-xl">
+            <div className="sticky top-0 border-b border-slate-200 bg-white px-5 py-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">Review swap</h2>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSuggestion(null)}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="space-y-6 px-5 py-6">
+              {(() => {
+                const s = selectedSuggestion;
+                const dayVisits = grouped.byCarerDay[s.carerId]?.[s.dayKey] ?? [];
+                const others = dayVisits.filter((v) => v.id !== s.visitA.id && v.id !== s.visitB.id);
+                const newAStart = s.visitB.start_time;
+                const newAEnd = s.visitB.end_time;
+                const newBStart = s.visitA.start_time;
+                const newBEnd = s.visitA.end_time;
+                const overlapsA = others.filter(
+                  (o) =>
+                    new Date(newAStart).getTime() < new Date(o.end_time).getTime() &&
+                    new Date(newAEnd).getTime() > new Date(o.start_time).getTime()
+                );
+                const overlapsB = others.filter(
+                  (o) =>
+                    new Date(newBStart).getTime() < new Date(o.end_time).getTime() &&
+                    new Date(newBEnd).getTime() > new Date(o.start_time).getTime()
+                );
+                const conflicts = [...overlapsA, ...overlapsB];
+                const travelBeforeFull = (() => {
+                  const sorted = [...dayVisits].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+                  let sum = 0;
+                  for (let i = 1; i < sorted.length; i++) {
+                    sum += getTravelMinutes(sorted[i - 1], sorted[i], serverTravelTimes);
+                  }
+                  return sum;
+                })();
+                const swappedOrder = [...dayVisits]
+                  .map((v) =>
+                    v.id === s.visitA.id ? { ...v, start_time: newAStart, end_time: newAEnd } : v.id === s.visitB.id ? { ...v, start_time: newBStart, end_time: newBEnd } : v
+                  )
+                  .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+                const travelAfterFull = (() => {
+                  let sum = 0;
+                  for (let i = 1; i < swappedOrder.length; i++) {
+                    sum += getTravelMinutes(swappedOrder[i - 1], swappedOrder[i], serverTravelTimes);
+                  }
+                  return sum;
+                })();
+
+                return (
+                  <>
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Carer · Date</h3>
+                      <p className="mt-1 font-medium text-slate-900">{s.carerName ?? "—"}</p>
+                      <p className="text-sm text-slate-600">{formatDateShort(new Date(s.dayKey))}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current</h3>
+                      <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium">{formatTime(s.visitA.start_time)}–{formatTime(s.visitA.end_time)}</span>
+                          <span className="text-slate-600">{s.visitA.client_name ?? "—"}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium">{formatTime(s.visitB.start_time)}–{formatTime(s.visitB.end_time)}</span>
+                          <span className="text-slate-600">{s.visitB.client_name ?? "—"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Proposed</h3>
+                      <div className="mt-2 space-y-2 rounded-lg border border-green-200 bg-green-50/30 p-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium">{formatTime(newBStart)}–{formatTime(newBEnd)}</span>
+                          <span className="text-slate-600">{s.visitA.client_name ?? "—"}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium">{formatTime(newAStart)}–{formatTime(newAEnd)}</span>
+                          <span className="text-slate-600">{s.visitB.client_name ?? "—"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Travel</h3>
+                      <div className="mt-2 flex flex-wrap gap-3 text-sm">
+                        <span className="text-slate-600">Before: {travelBeforeFull} min</span>
+                        <span className="text-slate-600">After: {travelAfterFull} min</span>
+                        <span className="font-medium text-green-700">Save {s.savingsMinutes} min</span>
+                      </div>
+                    </div>
+
+                    {conflicts.length > 0 && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                        <p className="text-xs font-semibold text-amber-800">⚠ Overlap after swap</p>
+                        <p className="mt-1 text-sm text-amber-700">
+                          Swapped times would overlap with: {conflicts.map((c) => c.client_name ?? "—").join(", ")}
+                        </p>
+                      </div>
+                    )}
+
+                    {panelError && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                        {panelError}
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        disabled={applyLoading}
+                        onClick={handleApplySwap}
+                        className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-50"
+                      >
+                        {applyLoading ? "Applying…" : "Apply swap"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSuggestion(null)}
+                        className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+          <span className="text-sm text-slate-700">{toast.message}</span>
+          {toast.undo && (
+            <button
+              type="button"
+              onClick={toast.undo}
+              className="rounded-lg bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-200"
+            >
+              Undo
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="text-slate-400 hover:text-slate-600"
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       {/* Visit detail modal */}
