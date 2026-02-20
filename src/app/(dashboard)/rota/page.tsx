@@ -137,8 +137,18 @@ export default function RotaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedVisit, setSelectedVisit] = useState<VisitWithContext | null>(null);
+  const [selectedDays, setSelectedDays] = useState<Set<string>>(() => new Set());
   const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
   const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
+
+  const toggleDaySelection = useCallback((dayKey: string) => {
+    setSelectedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(dayKey)) next.delete(dayKey);
+      else next.add(dayKey);
+      return next;
+    });
+  }, []);
 
   const { start, end, days } = useMemo(
     () => getWeekRange(weekStart),
@@ -260,13 +270,17 @@ export default function RotaPage() {
       travelWarnings: number;
       missingDoubleUp: number;
     };
+    const emptyStats = (): CarerWeekStats => ({
+      visitCount: 0, careMinutes: 0,
+      firstTime: null, lastTime: null,
+      travelWarnings: 0, missingDoubleUp: 0,
+    });
     const carerStats: Record<string, CarerWeekStats> = {};
+    for (const c of carers) {
+      carerStats[c.id] = emptyStats();
+    }
     for (const carerId of Object.keys(byCarerDay)) {
-      const stats: CarerWeekStats = {
-        visitCount: 0, careMinutes: 0,
-        firstTime: null, lastTime: null,
-        travelWarnings: 0, missingDoubleUp: 0,
-      };
+      const stats = carerStats[carerId] ?? emptyStats();
       for (const dayKey of Object.keys(byCarerDay[carerId])) {
         for (const v of byCarerDay[carerId][dayKey]) {
           stats.visitCount++;
@@ -499,17 +513,26 @@ export default function RotaPage() {
                   <th className="sticky left-0 z-30 min-w-[160px] border-r border-slate-200 bg-white px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                     Carer
                   </th>
-                  {days.map((d) => (
-                    <th
-                      key={d.toISOString()}
-                      className="min-w-[110px] px-3 py-4 text-center text-xs font-semibold text-slate-600"
-                    >
-                      <div>{DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1]}</div>
-                      <div className="mt-1 text-[11px] font-normal text-slate-500">
-                        {formatDateShort(d)}
-                      </div>
-                    </th>
-                  ))}
+                  {days.map((d) => {
+                    const dayKey = d.toISOString().slice(0, 10);
+                    const isSelected = selectedDays.has(dayKey);
+                    return (
+                      <th
+                        key={dayKey}
+                        onClick={() => toggleDaySelection(dayKey)}
+                        className={`min-w-[110px] cursor-pointer select-none px-3 py-4 text-center text-xs font-semibold transition-colors ${
+                          isSelected
+                            ? "bg-blue-100 text-blue-800 ring-1 ring-inset ring-blue-200"
+                            : "text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div>{DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1]}</div>
+                        <div className={`mt-1 text-[11px] ${isSelected ? "text-blue-600" : "font-normal text-slate-500"}`}>
+                          {formatDateShort(d)}
+                        </div>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200/80">
@@ -569,11 +592,14 @@ export default function RotaPage() {
                         const dayKey = d.toISOString().slice(0, 10);
                         const cellVisits =
                           grouped.byCarerDay[carer.id]?.[dayKey] ?? [];
+                        const isDaySelected = selectedDays.has(dayKey);
                         return (
                           <td
                             id={`rota-cell-${carer.id}-${dayKey}`}
                             key={dayKey}
-                            className="min-w-[110px] align-top border-l border-slate-200/60 bg-slate-50/30 px-2 py-3"
+                            className={`min-w-[110px] align-top border-l border-slate-200/60 px-2 py-3 ${
+                              isDaySelected ? "bg-blue-50/80 ring-1 ring-inset ring-blue-200/60" : "bg-slate-50/30"
+                            }`}
                           >
                             {cellVisits.length === 0 ? (
                               <span className="text-xs text-slate-400">—</span>
@@ -688,9 +714,17 @@ export default function RotaPage() {
               <div>
                 <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Carer(s)</dt>
                 <dd className="mt-0.5 font-medium text-slate-900">
-                  {selectedVisit.assignments?.length
-                    ? selectedVisit.assignments.map((a) => a.carer_name ?? "—").join(", ")
-                    : selectedVisit.carer_name ?? "—"}
+                  {(() => {
+                    if (selectedVisit.assignments?.length) {
+                      return selectedVisit.assignments.map((a) => a.carer_name ?? "—").join(", ");
+                    }
+                    const ids = Array.isArray(selectedVisit.carer_ids) && selectedVisit.carer_ids.length > 0
+                      ? selectedVisit.carer_ids
+                      : selectedVisit.carer_id ? [selectedVisit.carer_id] : [];
+                    const carerNames = Object.fromEntries(carers.map((c) => [c.id, c.name ?? "—"]));
+                    const names = ids.map((id) => carerNames[id] ?? "—").filter((n) => n !== "—");
+                    return names.length > 0 ? names.join(", ") : selectedVisit.carer_name ?? "—";
+                  })()}
                 </dd>
               </div>
               <div>
