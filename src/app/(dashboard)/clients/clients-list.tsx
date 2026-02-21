@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreateClientModal } from "./create-client-modal";
+import { EditClientModal } from "./edit-client-modal";
 
 type Client = {
   id: string;
@@ -11,6 +12,7 @@ type Client = {
   postcode: string | null;
   notes: string | null;
   requires_double_up?: boolean;
+  funding_type?: string;
   latitude?: number | null;
   longitude?: number | null;
 };
@@ -18,6 +20,7 @@ type Client = {
 export function ClientsList({ clients }: { clients: Client[] }) {
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
+  const [editClient, setEditClient] = useState<Client | null>(null);
   const [archiveClient, setArchiveClient] = useState<Client | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -118,6 +121,11 @@ export function ClientsList({ clients }: { clients: Client[] }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 font-semibold text-slate-900">
                     {c.name}
+                    {c.funding_type === "local_authority" && (
+                      <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-800">
+                        LA
+                      </span>
+                    )}
                     {c.requires_double_up && (
                       <span className="rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
                         Double-up
@@ -146,9 +154,14 @@ export function ClientsList({ clients }: { clients: Client[] }) {
                   )}
                   {c.notes && <div className="mt-1 text-sm text-slate-600">{c.notes}</div>}
                 </div>
-                <button type="button" onClick={() => { setError(""); setArchiveClient(c); }} className="shrink-0 text-sm font-medium text-red-600 transition hover:text-red-500">
-                  Archive
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" onClick={() => { setError(""); setEditClient(c); }} className="text-sm font-medium text-blue-600 transition hover:text-blue-500">
+                    Edit
+                  </button>
+                  <button type="button" onClick={() => { setError(""); setArchiveClient(c); }} className="text-sm font-medium text-red-600 transition hover:text-red-500">
+                    Archive
+                  </button>
+                </div>
               </li>
             ))
           )}
@@ -156,6 +169,9 @@ export function ClientsList({ clients }: { clients: Client[] }) {
       </div>
       {showModal && (
         <CreateClientModal onClose={() => setShowModal(false)} />
+      )}
+      {editClient && (
+        <EditClientModal client={editClient} onClose={() => setEditClient(null)} />
       )}
       {archiveClient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setArchiveClient(null)}>

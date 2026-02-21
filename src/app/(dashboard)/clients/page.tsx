@@ -20,6 +20,7 @@ export default async function ClientsPage() {
     postcode: string | null;
     notes: string | null;
     requires_double_up?: boolean;
+    funding_type?: string;
     latitude?: number | null;
     longitude?: number | null;
   };

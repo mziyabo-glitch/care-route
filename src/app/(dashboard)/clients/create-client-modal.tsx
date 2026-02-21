@@ -95,6 +95,17 @@ export function CreateClientModal({
               placeholder="Optional notes"
             />
           </div>
+          <div>
+            <label htmlFor="client-funding" className="mb-1.5 block text-sm font-medium text-slate-700">Funding type</label>
+            <select
+              id="client-funding"
+              name="funding_type"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
+            >
+              <option value="private">Private</option>
+              <option value="local_authority">Local Authority</option>
+            </select>
+          </div>
           <div className="flex items-center gap-2 rounded-lg border-2 border-amber-200 bg-amber-50/50 p-4">
             <input
               type="checkbox"

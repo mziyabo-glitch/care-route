@@ -11,6 +11,10 @@ export async function createClientAction(formData: FormData) {
   const postcode = (formData.get("postcode") as string)?.trim() || null;
   const notes = (formData.get("notes") as string)?.trim() || null;
   const requiresDoubleUp = formData.get("requires_double_up") === "on";
+  const fundingType = (formData.get("funding_type") as string)?.trim() || "private";
+  if (fundingType !== "private" && fundingType !== "local_authority") {
+    return { error: "Invalid funding type." };
+  }
 
   const agencyId = await getCurrentAgencyId();
   if (!agencyId) {
@@ -30,6 +34,7 @@ export async function createClientAction(formData: FormData) {
     p_requires_double_up: requiresDoubleUp,
     p_latitude: null,
     p_longitude: null,
+    p_funding_type: fundingType,
   });
 
   if (error) {
