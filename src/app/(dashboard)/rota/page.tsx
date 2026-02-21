@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Carer = { id: string; name: string | null };
@@ -144,6 +144,22 @@ export default function RotaPage() {
   const [applyLoading, setApplyLoading] = useState(false);
   const [panelError, setPanelError] = useState("");
   const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null);
+  const [carerFilter, setCarerFilter] = useState<Set<string>>(() => new Set());
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [issuesOnly, setIssuesOnly] = useState(false);
+  const [carerFilterOpen, setCarerFilterOpen] = useState(false);
+  const carerFilterRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!carerFilterOpen) return;
+    const onOutside = (e: MouseEvent) => {
+      if (carerFilterRef.current && !carerFilterRef.current.contains(e.target as Node)) {
+        setCarerFilterOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, [carerFilterOpen]);
 
   const toggleDaySelection = useCallback((dayKey: string) => {
     setSelectedDays((prev) => {
@@ -303,6 +319,49 @@ export default function RotaPage() {
     return { byCarerDay, unassigned, conflictIds, travelTightByVisit, carerStats };
   }, [visits, carers, serverTravelTimes]);
 
+  // Filtered carers for display
+  const filteredCarers = useMemo(() => {
+    let list = carers;
+    if (carerFilter.size > 0) {
+      list = list.filter((c) => carerFilter.has(c.id));
+    }
+    if (issuesOnly) {
+      list = list.filter((c) => {
+        const stats = grouped.carerStats[c.id];
+        return stats && (stats.travelWarnings > 0 || stats.missingDoubleUp > 0) ||
+          Object.keys(grouped.byCarerDay[c.id] ?? {}).some((dayKey) =>
+            (grouped.byCarerDay[c.id][dayKey] ?? []).some((v) => grouped.conflictIds.has(v.id))
+          );
+      });
+    }
+    return list;
+  }, [carers, carerFilter, issuesOnly, grouped]);
+
+  // Whether a visit passes status filter
+  const visitPassesStatus = useCallback(
+    (v: VisitWithContext) =>
+      statusFilter === "all" || v.status === statusFilter,
+    [statusFilter]
+  );
+
+  const carersWithVisits = useMemo(
+    () => carers.filter((c) => (grouped.carerStats[c.id]?.visitCount ?? 0) > 0),
+    [carers, grouped.carerStats]
+  );
+  const hasActiveFilters = carerFilter.size > 0 || statusFilter !== "all" || issuesOnly;
+  const clearFilters = useCallback(() => {
+    setCarerFilter(new Set());
+    setStatusFilter("all");
+    setIssuesOnly(false);
+    setCarerFilterOpen(false);
+  }, []);
+
+  const goToday = useCallback(() => {
+    const monday = getMondayOfWeek(new Date());
+    setWeekStart(monday);
+    router.push(`/rota?week=${monday.toISOString().slice(0, 10)}`);
+  }, [router]);
+
   // Route reordering suggestions: one per carer/day with largest saving > 8 min
   const reorderSuggestions = useMemo(() => {
     const out: ReorderSuggestion[] = [];
@@ -410,7 +469,14 @@ export default function RotaPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-slate-900">Rota</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={goToday}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+          >
+            Today
+          </button>
           <button
             type="button"
             onClick={goPrev}
@@ -430,6 +496,102 @@ export default function RotaPage() {
           </button>
         </div>
       </div>
+
+      {/* Filter bar */}
+      {!loading && (
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200/80 bg-white px-5 py-3.5 shadow-sm ring-1 ring-slate-900/5">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Filters</span>
+          <div className="relative" ref={carerFilterRef}>
+            <button
+              type="button"
+              onClick={() => setCarerFilterOpen((o) => !o)}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                carerFilter.size > 0
+                  ? "border-blue-300 bg-blue-50 text-blue-700"
+                  : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              Carers
+              {carerFilter.size > 0 && (
+                <span className="rounded-full bg-blue-200 px-1.5 py-0.5 text-xs text-blue-800">
+                  {carerFilter.size}
+                </span>
+              )}
+              <span className="text-slate-400">▼</span>
+            </button>
+            {carerFilterOpen && (
+              <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-52 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                {carersWithVisits.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-slate-500">No carers with visits</div>
+                ) : (
+                  carersWithVisits.map((c) => {
+                      const checked = carerFilter.size === 0 || carerFilter.has(c.id);
+                      return (
+                        <label
+                          key={c.id}
+                          className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const allIds = new Set(carersWithVisits.map((x) => x.id));
+                              const next = carerFilter.size === 0 ? new Set(allIds) : new Set(carerFilter);
+                              if (next.has(c.id)) next.delete(c.id);
+                              else next.add(c.id);
+                              setCarerFilter(next.size === 0 || next.size === carersWithVisits.length ? new Set() : next);
+                            }}
+                            className="rounded border-slate-300"
+                          />
+                          <span className="text-slate-700">{c.name ?? "—"}</span>
+                        </label>
+                      );
+                    })
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200/80 bg-slate-50/50 p-1">
+            {(["all", "scheduled", "completed", "missed"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                  statusFilter === s
+                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200"
+                    : "text-slate-600 hover:text-slate-800"
+                }`}
+              >
+                {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+          <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+            issuesOnly ? "border-amber-300 bg-amber-50 text-amber-800" : "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+          }`}>
+            <input
+              type="checkbox"
+              checked={issuesOnly}
+              onChange={(e) => setIssuesOnly(e.target.checked)}
+              className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+            />
+            <span>Issues only</span>
+          </label>
+          {hasActiveFilters && (
+            <>
+              <span className="h-4 w-px bg-slate-200" aria-hidden />
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                Clear all
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
@@ -543,13 +705,13 @@ export default function RotaPage() {
           )}
 
           {/* Legend */}
-          <div className="flex flex-wrap items-center gap-5 rounded-xl border border-slate-200 bg-white px-5 py-3 text-xs text-slate-600 shadow-sm">
-            <span className="font-semibold uppercase tracking-wide text-slate-400">Key</span>
-            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-green-500" /> OK</span>
-            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-slate-300" /> Completed</span>
-            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-500" /> Travel tight</span>
-            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-500" /> Missing 2nd</span>
-            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-blue-500" /> Joint</span>
+          <div className="flex flex-wrap items-center gap-4 rounded-lg border border-slate-200/80 bg-slate-50/60 px-4 py-2.5 text-xs text-slate-600">
+            <span className="font-semibold uppercase tracking-wider text-slate-400">Key</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-green-500" /> OK</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-300" /> Completed</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" /> Travel tight</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500" /> Missing 2nd</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-500" /> Joint</span>
           </div>
 
           {/* Main grid */}
@@ -583,17 +745,19 @@ export default function RotaPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200/80">
-                {carers.length === 0 ? (
+                {filteredCarers.length === 0 ? (
                   <tr>
                     <td
                       colSpan={8}
                       className="bg-white px-6 py-16 text-center text-sm text-slate-500"
                     >
-                      No carers yet. Add carers to see the rota.
+                      {carers.length === 0
+                        ? "No carers yet. Add carers to see the rota."
+                        : "No carers match the current filters."}
                     </td>
                   </tr>
                 ) : (
-                  carers.map((carer) => {
+                  filteredCarers.map((carer) => {
                     const stats = grouped.carerStats[carer.id];
                     const hasVisits = stats && stats.visitCount > 0;
                     const hours = hasVisits ? Math.floor(stats.careMinutes / 60) : 0;
@@ -637,8 +801,10 @@ export default function RotaPage() {
                       </td>
                       {days.map((d) => {
                         const dayKey = d.toISOString().slice(0, 10);
-                        const cellVisits =
-                          grouped.byCarerDay[carer.id]?.[dayKey] ?? [];
+                        const rawVisits = grouped.byCarerDay[carer.id]?.[dayKey] ?? [];
+                        const cellVisits = statusFilter === "all"
+                          ? rawVisits
+                          : rawVisits.filter(visitPassesStatus);
                         const isDaySelected = selectedDays.has(dayKey);
                         return (
                           <td
