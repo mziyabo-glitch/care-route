@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentRole } from "@/lib/permissions";
+import { BillingNav } from "./billing-nav";
 
 export default async function BillingLayout({
   children,
@@ -13,5 +14,10 @@ export default async function BillingLayout({
     redirect("/dashboard");
   }
 
-  return <>{children}</>;
+  return (
+    <div className="space-y-6">
+      <BillingNav />
+      {children}
+    </div>
+  );
 }
