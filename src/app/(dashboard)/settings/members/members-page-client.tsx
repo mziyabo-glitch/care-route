@@ -24,6 +24,7 @@ const ROLE_OPTIONS = [
   { value: "admin", label: "Admin" },
   { value: "manager", label: "Manager" },
   { value: "viewer", label: "Viewer" },
+  { value: "carer", label: "Carer" },
 ] as const;
 
 function roleBadgeClass(role: string) {
@@ -31,9 +32,10 @@ function roleBadgeClass(role: string) {
     case "owner":
       return "bg-amber-100 text-amber-800";
     case "admin":
-      return "bg-blue-100 text-blue-800";
     case "manager":
       return "bg-blue-100 text-blue-800";
+    case "carer":
+      return "bg-green-100 text-green-800";
     default:
       return "bg-slate-100 text-slate-700";
   }
