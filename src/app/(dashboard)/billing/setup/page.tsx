@@ -61,13 +61,17 @@ export default function BillingSetupPage() {
   }, [fetchData]);
 
   async function api(action: string, body: Record<string, unknown>) {
+    const cleaned: Record<string, unknown> = { action };
+    for (const [k, v] of Object.entries(body)) {
+      cleaned[k] = typeof v === "string" && v.trim() === "" ? null : v;
+    }
     setSaving(true);
     setError("");
     try {
       const res = await fetch("/api/billing/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, ...body }),
+        body: JSON.stringify(cleaned),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -183,7 +187,7 @@ export default function BillingSetupPage() {
           funder={funderModal}
           onSave={async (name, type) => {
             const ok = await api("upsert_funder", {
-              id: funderModal.id || undefined,
+              id: funderModal.id || null,
               name,
               type,
             });
@@ -371,12 +375,12 @@ function RatesModal({
           onSave={async (r) => {
             const ok = await api("upsert_funder_rate", {
               funder_id: funder.id,
-              id: r.id,
+              id: r.id || null,
               rate_type: r.rate_type,
               hourly_rate: r.hourly_rate,
-              mileage_rate: r.mileage_rate ?? 0,
+              mileage_rate: r.mileage_rate ?? null,
               effective_from: r.effective_from,
-              effective_to: r.effective_to,
+              effective_to: r.effective_to || null,
             });
             if (ok) {
               setEditingRate(null);
@@ -465,7 +469,7 @@ function RateFormModal({
             type="button"
             onClick={() =>
               onSave({
-                id: rate.id ?? "",
+                id: rate.id || null,
                 rate_type: rate.rate_type!,
                 hourly_rate: parseFloat(hourlyRate) || 0,
                 mileage_rate: mileageRate ? parseFloat(mileageRate) : null,
@@ -506,8 +510,9 @@ function AssignModal({
   saving: boolean;
   api: (action: string, body: Record<string, unknown>) => Promise<boolean>;
 }) {
-  const [clientId, setClientId] = useState("");
-  const [funderId, setFunderId] = useState("");
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [funderId, setFunderId] = useState<string | null>(null);
+  const [assignError, setAssignError] = useState("");
   const clientFunderMap = Object.fromEntries(clientFunders.map((cf) => [cf.client_id, cf]));
 
   return (
@@ -518,8 +523,8 @@ function AssignModal({
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Client</label>
             <select
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
+              value={clientId ?? ""}
+              onChange={(e) => { setClientId(e.target.value || null); setAssignError(""); }}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
             >
               <option value="">Select client</option>
@@ -533,8 +538,8 @@ function AssignModal({
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Funder</label>
             <select
-              value={funderId}
-              onChange={(e) => setFunderId(e.target.value)}
+              value={funderId ?? ""}
+              onChange={(e) => { setFunderId(e.target.value || null); setAssignError(""); }}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
             >
               <option value="">Select funder</option>
@@ -546,11 +551,18 @@ function AssignModal({
             </select>
           </div>
         </div>
+        {assignError && (
+          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{assignError}</p>
+        )}
         <div className="mt-6 flex flex-wrap gap-3">
           <button
             type="button"
-            onClick={() => clientId && funderId && onAssign(clientId, funderId)}
-            disabled={saving || !clientId || !funderId}
+            onClick={() => {
+              if (!clientId) { setAssignError("Please select a client first"); return; }
+              if (!funderId) { setAssignError("Please select a funder first"); return; }
+              onAssign(clientId, funderId);
+            }}
+            disabled={saving}
             className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
           >
             {saving ? "Saving…" : "Assign"}

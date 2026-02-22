@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentAgencyId } from "@/lib/agency";
 import { getCurrentRole } from "@/lib/permissions";
+
+function cleanUuid(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  return t.length > 0 ? t : null;
+}
 
 export async function GET() {
   const { agencyId, role } = await getCurrentRole();
@@ -45,10 +50,12 @@ export async function POST(request: Request) {
   const supabase = await createClient();
 
   if (action === "upsert_funder") {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) return NextResponse.json({ error: "Funder name is required" }, { status: 400 });
     const { data, error } = await supabase.rpc("upsert_funder", {
       p_agency_id: agencyId,
-      p_id: body.id ?? null,
-      p_name: body.name,
+      p_id: cleanUuid(body.id),
+      p_name: name,
       p_type: body.type ?? "private",
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -56,21 +63,27 @@ export async function POST(request: Request) {
   }
 
   if (action === "delete_funder") {
+    const funderId = cleanUuid(body.funder_id);
+    if (!funderId) return NextResponse.json({ error: "funder_id is required" }, { status: 400 });
     const { error } = await supabase.rpc("delete_funder", {
       p_agency_id: agencyId,
-      p_funder_id: body.funder_id,
+      p_funder_id: funderId,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
 
   if (action === "upsert_funder_rate") {
+    const funderId = cleanUuid(body.funder_id);
+    if (!funderId) return NextResponse.json({ error: "funder_id is required" }, { status: 400 });
+    if (!body.rate_type) return NextResponse.json({ error: "rate_type is required" }, { status: 400 });
+    if (!body.effective_from) return NextResponse.json({ error: "effective_from is required" }, { status: 400 });
     const { data, error } = await supabase.rpc("upsert_funder_rate", {
       p_agency_id: agencyId,
-      p_funder_id: body.funder_id,
-      p_id: body.id ?? null,
+      p_funder_id: funderId,
+      p_id: cleanUuid(body.id),
       p_rate_type: body.rate_type,
-      p_hourly_rate: body.hourly_rate,
+      p_hourly_rate: body.hourly_rate ?? 0,
       p_mileage_rate: body.mileage_rate ?? null,
       p_effective_from: body.effective_from,
       p_effective_to: body.effective_to ?? null,
@@ -80,19 +93,25 @@ export async function POST(request: Request) {
   }
 
   if (action === "set_client_funder") {
+    const clientId = cleanUuid(body.client_id);
+    const funderId = cleanUuid(body.funder_id);
+    if (!clientId) return NextResponse.json({ error: "Please select a client" }, { status: 400 });
+    if (!funderId) return NextResponse.json({ error: "Please select a funder" }, { status: 400 });
     const { error } = await supabase.rpc("set_client_funder", {
       p_agency_id: agencyId,
-      p_client_id: body.client_id,
-      p_funder_id: body.funder_id,
+      p_client_id: clientId,
+      p_funder_id: funderId,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
 
   if (action === "clear_client_funder") {
+    const clientId = cleanUuid(body.client_id);
+    if (!clientId) return NextResponse.json({ error: "client_id is required" }, { status: 400 });
     const { error } = await supabase.rpc("clear_client_funder", {
       p_agency_id: agencyId,
-      p_client_id: body.client_id,
+      p_client_id: clientId,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });

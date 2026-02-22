@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const funderId = searchParams.get("funder_id");
+  const funderId = (searchParams.get("funder_id") ?? "").trim();
   if (!funderId) {
     return NextResponse.json({ error: "funder_id required" }, { status: 400 });
   }
