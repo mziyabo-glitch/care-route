@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 
 type Funder = { id: string; name: string; type: string };
-type FunderRate = { id: string; rate_type: string; hourly_rate: number; mileage_rate: number | null; effective_from: string; effective_to: string | null };
+type BillingRate = { id: string; role: string; rate_type: string; amount: number; mileage_rate: number | null };
 type ClientFunder = { client_id: string; client_name: string | null; funder_id: string; funder_name: string; active: boolean };
 type Client = { id: string; name: string | null };
 
@@ -14,15 +14,19 @@ const FUNDER_TYPES = [
   { value: "other", label: "Other" },
 ];
 
-const RATE_TYPES = [
-  { value: "standard", label: "Standard" },
-  { value: "evening", label: "Evening (before 8am / after 6pm)" },
-  { value: "weekend", label: "Weekend" },
-  { value: "holiday", label: "Holiday" },
+const CARER_ROLES = [
+  { value: "carer", label: "Carer" },
+  { value: "senior", label: "Senior" },
+  { value: "nurse", label: "Nurse" },
+  { value: "manager", label: "Manager" },
 ];
 
 function formatFunderType(t: string): string {
   return FUNDER_TYPES.find((x) => x.value === t)?.label ?? t;
+}
+
+function formatRole(r: string): string {
+  return CARER_ROLES.find((x) => x.value === r)?.label ?? r;
 }
 
 export default function BillingSetupPage() {
@@ -128,13 +132,20 @@ export default function BillingSetupPage() {
                   <span className="font-medium text-slate-900">{f.name}</span>
                   <span className="ml-2 rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{formatFunderType(f.type)}</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => setRatesModal(f)}
-                    className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                    className="text-sm font-medium text-blue-600 hover:text-blue-700"
                   >
                     Rates
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFunderModal(f)}
+                    className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                  >
+                    Edit
                   </button>
                   <button
                     type="button"
@@ -181,16 +192,11 @@ export default function BillingSetupPage() {
         </div>
       </section>
 
-      {/* Funder modal */}
       {funderModal && (
         <FunderModal
           funder={funderModal}
           onSave={async (name, type) => {
-            const ok = await api("upsert_funder", {
-              id: funderModal.id || null,
-              name,
-              type,
-            });
+            const ok = await api("upsert_funder", { id: funderModal.id || null, name, type });
             if (ok) setFunderModal(null);
           }}
           onClose={() => setFunderModal(null)}
@@ -198,18 +204,15 @@ export default function BillingSetupPage() {
         />
       )}
 
-      {/* Rates modal */}
       {ratesModal && (
         <RatesModal
           funder={ratesModal}
           onClose={() => setRatesModal(null)}
           saving={saving}
           api={api}
-          fetchData={fetchData}
         />
       )}
 
-      {/* Assign modal */}
       {assignModal && (
         <AssignModal
           clients={clients}
@@ -219,9 +222,6 @@ export default function BillingSetupPage() {
             const ok = await api("set_client_funder", { client_id: clientId, funder_id: funderId });
             if (ok) setAssignModal(false);
           }}
-          onClear={async (clientId) => {
-            await api("clear_client_funder", { client_id: clientId });
-          }}
           onClose={() => setAssignModal(false)}
           saving={saving}
           api={api}
@@ -230,6 +230,8 @@ export default function BillingSetupPage() {
     </div>
   );
 }
+
+/* ─── Funder modal ─── */
 
 function FunderModal({
   funder,
@@ -263,9 +265,7 @@ function FunderModal({
             <label className="mb-1 block text-sm font-medium text-slate-700">Type</label>
             <select value={type} onChange={(e) => setType(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
               {FUNDER_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
+                <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
           </div>
@@ -288,108 +288,115 @@ function FunderModal({
   );
 }
 
+/* ─── Rates modal (role-based) ─── */
+
 function RatesModal({
   funder,
   onClose,
   saving,
   api,
-  fetchData,
 }: {
   funder: Funder;
   onClose: () => void;
   saving: boolean;
   api: (action: string, body: Record<string, unknown>) => Promise<boolean>;
-  fetchData: () => Promise<void>;
 }) {
-  const [rates, setRates] = useState<FunderRate[]>([]);
+  const [rates, setRates] = useState<BillingRate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingRate, setEditingRate] = useState<Partial<FunderRate> | null>(null);
+  const [editingRole, setEditingRole] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetch(`/api/billing/rates?funder_id=${funder.id}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setRates(d.rates ?? []);
-      })
-      .finally(() => setLoading(false));
+  const loadRates = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/billing/rates?funder_id=${funder.id}`);
+      const d = await res.json();
+      setRates(d.rates ?? []);
+    } finally {
+      setLoading(false);
+    }
   }, [funder.id]);
+
+  useEffect(() => { loadRates(); }, [loadRates]);
+
+  const rateMap = Object.fromEntries(rates.map((r) => [r.role, r]));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-slate-900">Rates: {funder.name}</h3>
+        <p className="mt-1 text-sm text-slate-500">Set hourly and mileage rates per carer role.</p>
+
         {loading ? (
           <div className="py-8 text-center text-sm text-slate-500">Loading…</div>
         ) : (
-          <div className="mt-4 space-y-3">
-            {RATE_TYPES.map((rt) => {
-              const existing = rates.find((r) => r.rate_type === rt.value);
-              return (
-                <div key={rt.value} className="rounded-lg border border-slate-200 p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-slate-700">{rt.label}</span>
-                    {existing ? (
-                      <span className="text-sm text-slate-600">
-                        £{Number(existing.hourly_rate).toFixed(2)}/hr
-                        {existing.mileage_rate != null ? ` · £${Number(existing.mileage_rate).toFixed(2)}/mi` : ""}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-slate-400">Not set</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setEditingRate(
-                          existing
-                            ? { ...existing }
-                            : {
-                                rate_type: rt.value,
-                                hourly_rate: 0,
-                                mileage_rate: null,
-                                effective_from: new Date().toISOString().slice(0, 10),
-                                effective_to: null,
-                              }
-                        )
-                      }
-                      className="text-sm font-medium text-slate-600 hover:text-slate-900"
-                    >
-                      {existing ? "Edit" : "Add"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="mt-5 overflow-hidden rounded-lg border border-slate-200">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="px-4 py-2.5 text-left font-medium text-slate-600">Role</th>
+                  <th className="px-4 py-2.5 text-right font-medium text-slate-600">Hourly (£)</th>
+                  <th className="px-4 py-2.5 text-right font-medium text-slate-600">Mileage (£/mi)</th>
+                  <th className="px-4 py-2.5 text-right font-medium text-slate-600" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {CARER_ROLES.map((cr) => {
+                  const rate = rateMap[cr.value];
+                  return (
+                    <tr key={cr.value} className="hover:bg-slate-50/60">
+                      <td className="px-4 py-3 font-medium text-slate-900">{cr.label}</td>
+                      <td className="px-4 py-3 text-right text-slate-700">
+                        {rate ? `£${Number(rate.amount).toFixed(2)}` : <span className="text-slate-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-700">
+                        {rate?.mileage_rate != null
+                          ? `£${Number(rate.mileage_rate).toFixed(2)}`
+                          : <span className="text-slate-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setEditingRole(cr.value)}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                        >
+                          {rate ? "Edit" : "Set"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
+
         <div className="mt-6">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
             Close
           </button>
         </div>
       </div>
 
-      {editingRate && (
+      {editingRole && (
         <RateFormModal
           funderId={funder.id}
-          rate={editingRate}
-          onSave={async (r) => {
-            const ok = await api("upsert_funder_rate", {
+          role={editingRole}
+          existing={rateMap[editingRole] ?? null}
+          onSave={async (amount, mileageRate) => {
+            const ok = await api("upsert_billing_rate", {
               funder_id: funder.id,
-              id: r.id || null,
-              rate_type: r.rate_type,
-              hourly_rate: r.hourly_rate,
-              mileage_rate: r.mileage_rate ?? null,
-              effective_from: r.effective_from,
-              effective_to: r.effective_to || null,
+              id: rateMap[editingRole]?.id || null,
+              role: editingRole,
+              rate_type: "hourly",
+              amount,
+              mileage_rate: mileageRate,
             });
             if (ok) {
-              setEditingRate(null);
-              const res = await fetch(`/api/billing/rates?funder_id=${funder.id}`);
-              const d = await res.json();
-              setRates(d.rates ?? []);
+              setEditingRole(null);
+              await loadRates();
             }
           }}
-          onClose={() => setEditingRate(null)}
+          onClose={() => setEditingRole(null)}
           saving={saving}
         />
       )}
@@ -397,30 +404,30 @@ function RatesModal({
   );
 }
 
+/* ─── Rate form modal ─── */
+
 function RateFormModal({
   funderId,
-  rate,
+  role,
+  existing,
   onSave,
   onClose,
   saving,
 }: {
   funderId: string;
-  rate: Partial<FunderRate>;
-  onSave: (r: FunderRate) => Promise<void>;
+  role: string;
+  existing: BillingRate | null;
+  onSave: (amount: number, mileageRate: number | null) => Promise<void>;
   onClose: () => void;
   saving: boolean;
 }) {
-  const [hourlyRate, setHourlyRate] = useState(String(rate.hourly_rate ?? 0));
-  const [mileageRate, setMileageRate] = useState(rate.mileage_rate != null ? String(rate.mileage_rate) : "");
-  const [effectiveFrom, setEffectiveFrom] = useState(rate.effective_from ?? new Date().toISOString().slice(0, 10));
-  const [effectiveTo, setEffectiveTo] = useState(rate.effective_to ?? "");
-
-  const rateTypeLabel = RATE_TYPES.find((r) => r.value === rate.rate_type)?.label ?? rate.rate_type;
+  const [amount, setAmount] = useState(String(existing?.amount ?? ""));
+  const [mileageRate, setMileageRate] = useState(existing?.mileage_rate != null ? String(existing.mileage_rate) : "");
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
       <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h4 className="font-semibold text-slate-900">{rateTypeLabel}</h4>
+        <h4 className="font-semibold text-slate-900">{formatRole(role)} — hourly rate</h4>
         <div className="mt-4 space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Hourly rate (£)</label>
@@ -428,13 +435,14 @@ function RateFormModal({
               type="number"
               step="0.01"
               min="0"
-              value={hourlyRate}
-              onChange={(e) => setHourlyRate(e.target.value)}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              placeholder="e.g. 15.00"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Mileage rate (£/mile)</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Mileage rate (£/mile, optional)</label>
             <input
               type="number"
               step="0.01"
@@ -442,42 +450,15 @@ function RateFormModal({
               value={mileageRate}
               onChange={(e) => setMileageRate(e.target.value)}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              placeholder="Optional"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Effective from</label>
-            <input
-              type="date"
-              value={effectiveFrom}
-              onChange={(e) => setEffectiveFrom(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Effective to (optional)</label>
-            <input
-              type="date"
-              value={effectiveTo}
-              onChange={(e) => setEffectiveTo(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              placeholder="e.g. 0.45"
             />
           </div>
         </div>
         <div className="mt-6 flex gap-3">
           <button
             type="button"
-            onClick={() =>
-              onSave({
-                id: rate.id || null,
-                rate_type: rate.rate_type!,
-                hourly_rate: parseFloat(hourlyRate) || 0,
-                mileage_rate: mileageRate ? parseFloat(mileageRate) : null,
-                effective_from: effectiveFrom,
-                effective_to: effectiveTo || null,
-              } as FunderRate)
-            }
-            disabled={saving}
+            onClick={() => onSave(parseFloat(amount) || 0, mileageRate ? parseFloat(mileageRate) : null)}
+            disabled={saving || !amount}
             className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save"}
@@ -491,12 +472,13 @@ function RateFormModal({
   );
 }
 
+/* ─── Assign modal ─── */
+
 function AssignModal({
   clients,
   funders,
   clientFunders,
   onAssign,
-  onClear,
   onClose,
   saving,
   api,
@@ -505,7 +487,6 @@ function AssignModal({
   funders: Funder[];
   clientFunders: ClientFunder[];
   onAssign: (clientId: string, funderId: string) => Promise<void>;
-  onClear: (clientId: string) => Promise<void>;
   onClose: () => void;
   saving: boolean;
   api: (action: string, body: Record<string, unknown>) => Promise<boolean>;

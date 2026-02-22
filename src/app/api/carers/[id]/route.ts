@@ -44,7 +44,7 @@ export async function PATCH(
     updates.phone = (body.phone as string)?.trim() || null;
   }
   if (body.role !== undefined) {
-    updates.role = (body.role as string)?.trim() || null;
+    updates.role = (body.role as string)?.trim().toLowerCase() || "carer";
   }
   if (body.active !== undefined) {
     updates.active = !!body.active;

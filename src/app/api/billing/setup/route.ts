@@ -73,23 +73,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  if (action === "upsert_funder_rate") {
+  if (action === "upsert_billing_rate") {
     const funderId = cleanUuid(body.funder_id);
     if (!funderId) return NextResponse.json({ error: "funder_id is required" }, { status: 400 });
-    if (!body.rate_type) return NextResponse.json({ error: "rate_type is required" }, { status: 400 });
-    if (!body.effective_from) return NextResponse.json({ error: "effective_from is required" }, { status: 400 });
-    const { data, error } = await supabase.rpc("upsert_funder_rate", {
+    const carerRole = typeof body.role === "string" ? body.role.trim().toLowerCase() : "";
+    if (!carerRole) return NextResponse.json({ error: "role is required" }, { status: 400 });
+    const { data, error } = await supabase.rpc("upsert_billing_rate", {
       p_agency_id: agencyId,
       p_funder_id: funderId,
+      p_role: carerRole,
+      p_amount: body.amount ?? 0,
+      p_rate_type: body.rate_type ?? "hourly",
       p_id: cleanUuid(body.id),
-      p_rate_type: body.rate_type,
-      p_hourly_rate: body.hourly_rate ?? 0,
       p_mileage_rate: body.mileage_rate ?? null,
-      p_effective_from: body.effective_from,
-      p_effective_to: body.effective_to ?? null,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data);
+  }
+
+  if (action === "delete_billing_rate") {
+    const rateId = cleanUuid(body.rate_id);
+    if (!rateId) return NextResponse.json({ error: "rate_id is required" }, { status: 400 });
+    const { error } = await supabase.rpc("delete_billing_rate", {
+      p_agency_id: agencyId,
+      p_rate_id: rateId,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
   }
 
   if (action === "set_client_funder") {

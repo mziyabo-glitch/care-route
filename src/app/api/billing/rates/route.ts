@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("list_funder_rates", {
+  const { data, error } = await supabase.rpc("list_billing_rates", {
     p_agency_id: agencyId,
     p_funder_id: funderId,
   });

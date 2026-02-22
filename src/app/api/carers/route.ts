@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   const name = (body.name as string)?.trim();
   const email = (body.email as string)?.trim() || null;
   const phone = (body.phone as string)?.trim() || null;
-  const role = (body.role as string)?.trim() || null;
+  const role = (body.role as string)?.trim().toLowerCase() || "carer";
   const active = body.active !== false;
 
   if (!name) {
