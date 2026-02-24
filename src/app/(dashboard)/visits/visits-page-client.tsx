@@ -1,7 +1,21 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+
+function ElapsedTimer({ since }: { since: string }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const iv = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, []);
+  const s = Math.max(0, Math.floor((now - new Date(since).getTime()) / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return <>{h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`}</>;
+}
 
 type Assignment = { carer_id: string; carer_name: string | null; role: string };
 type Visit = {
@@ -20,6 +34,9 @@ type Visit = {
   end_time: string;
   status: string;
   notes: string | null;
+  check_in_at?: string | null;
+  check_out_at?: string | null;
+  break_minutes?: number | null;
 };
 
 type Client = { id: string; name: string | null };
@@ -27,31 +44,47 @@ type Carer = { id: string; name: string | null };
 
 const STATUS_OPTIONS = [
   { value: "scheduled", label: "Scheduled" },
+  { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },
   { value: "missed", label: "Missed" },
 ] as const;
+
+type Adjustment = {
+  id: string;
+  adjusted_field: string;
+  before_value: string | null;
+  after_value: string | null;
+  reason: string;
+  adjusted_at: string;
+};
 
 export function VisitsPageClient({
   agencyId,
   initialVisits,
   clients,
   carers,
+  userRole,
 }: {
   agencyId: string;
   initialVisits: Visit[];
   clients: Client[];
   carers: Carer[];
+  userRole?: string | null;
 }) {
   const router = useRouter();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editVisit, setEditVisit] = useState<Visit | null>(null);
   const [deleteVisit, setDeleteVisit] = useState<Visit | null>(null);
+  const [adjustVisit, setAdjustVisit] = useState<Visit | null>(null);
+  const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
+  const [adjustLoading, setAdjustLoading] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [createJoint, setCreateJoint] = useState(false);
   const [editJoint, setEditJoint] = useState(false);
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [dateFilter, setDateFilter] = useState("");
+  const isManager = userRole === "owner" || userRole === "admin" || userRole === "manager";
 
   const uniqueDates = useMemo(() => {
     const dates = new Set(
@@ -111,6 +144,8 @@ export function VisitsPageClient({
 
   function getStatusBadgeClass(status: string) {
     switch (status) {
+      case "in_progress":
+        return "bg-emerald-100 text-emerald-700";
       case "completed":
         return "bg-slate-100 text-slate-600";
       case "missed":
@@ -118,6 +153,61 @@ export function VisitsPageClient({
       default:
         return "bg-blue-50 text-blue-700";
     }
+  }
+
+  async function handleCheckIn(visitId: string) {
+    setError("");
+    setSubmitting(true);
+    const res = await fetch(`/api/visits/${visitId}/check-in`, { method: "POST" });
+    const data = await res.json();
+    setSubmitting(false);
+    if (!res.ok) { setError(data.error ?? "Check-in failed"); return; }
+    router.refresh();
+  }
+
+  async function handleCheckOut(visitId: string) {
+    setError("");
+    setSubmitting(true);
+    const res = await fetch(`/api/visits/${visitId}/check-out`, { method: "POST" });
+    const data = await res.json();
+    setSubmitting(false);
+    if (!res.ok) { setError(data.error ?? "Check-out failed"); return; }
+    router.refresh();
+  }
+
+  async function openAdjustModal(v: Visit) {
+    setError("");
+    setAdjustVisit(v);
+    setAdjustLoading(true);
+    const res = await fetch(`/api/visits/${v.id}/adjust`);
+    const data = await res.json();
+    setAdjustLoading(false);
+    setAdjustments(Array.isArray(data.adjustments) ? data.adjustments : []);
+  }
+
+  async function handleAdjustSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!adjustVisit) return;
+    setError("");
+    setSubmitting(true);
+    const fd = new FormData(e.currentTarget);
+    const body: Record<string, unknown> = { reason: (fd.get("reason") as string)?.trim() };
+    const ci = (fd.get("check_in_at") as string)?.trim();
+    const co = (fd.get("check_out_at") as string)?.trim();
+    const brk = (fd.get("break_minutes") as string)?.trim();
+    if (ci) body.check_in_at = new Date(ci).toISOString();
+    if (co) body.check_out_at = new Date(co).toISOString();
+    if (brk) body.break_minutes = parseInt(brk, 10);
+    const res = await fetch(`/api/visits/${adjustVisit.id}/adjust`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    setSubmitting(false);
+    if (!res.ok) { setError(data.error ?? "Adjustment failed"); return; }
+    setAdjustVisit(null);
+    router.refresh();
   }
 
   const isConflictError =
@@ -351,6 +441,12 @@ export function VisitsPageClient({
                         <div className="mt-1 text-xs text-slate-500">
                           {formatDateTime(v.start_time)} – {formatDateTime(v.end_time)}
                         </div>
+                        {v.check_in_at && v.check_out_at && (
+                          <div className="mt-0.5 text-[10px] text-emerald-600">
+                            Actual: {formatDateTime(v.check_in_at)} – {formatDateTime(v.check_out_at)}
+                            {(v.break_minutes ?? 0) > 0 && <span className="text-slate-400"> ({v.break_minutes}m break)</span>}
+                          </div>
+                        )}
                         {v.notes && (
                           <div className="mt-0.5 text-xs text-slate-500">{v.notes}</div>
                         )}
@@ -371,6 +467,33 @@ export function VisitsPageClient({
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
+                        {v.status === "scheduled" && (
+                          <button
+                            type="button"
+                            onClick={() => handleCheckIn(v.id)}
+                            disabled={submitting}
+                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-emerald-500 disabled:opacity-60"
+                          >
+                            Check In
+                          </button>
+                        )}
+                        {v.status === "in_progress" && (
+                          <>
+                            {v.check_in_at && (
+                              <span className="text-[10px] text-emerald-600 font-medium tabular-nums">
+                                <ElapsedTimer since={v.check_in_at} />
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleCheckOut(v.id)}
+                              disabled={submitting}
+                              className="rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-amber-500 disabled:opacity-60"
+                            >
+                              Check Out
+                            </button>
+                          </>
+                        )}
                         {missingSecond && (
                           <button
                             type="button"
@@ -398,6 +521,16 @@ export function VisitsPageClient({
                         >
                           Edit
                         </button>
+                        {isManager && (v.status === "completed" || v.status === "in_progress") && (
+                          <button
+                            type="button"
+                            onClick={() => openAdjustModal(v)}
+                            className="text-xs font-medium text-violet-600 transition hover:text-violet-500 disabled:opacity-60"
+                            disabled={submitting}
+                          >
+                            Adjust
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => { setError(""); setDeleteVisit(v); }}
@@ -725,6 +858,124 @@ export function VisitsPageClient({
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Adjust visit modal */}
+      {adjustVisit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setAdjustVisit(null); setError(""); }}>
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-slate-900">Adjust Visit Times</h2>
+            <p className="mt-1 text-sm text-slate-500">{adjustVisit.client_name} — {adjustVisit.carer_name}</p>
+
+            {/* Scheduled vs Actual comparison */}
+            <div className="mt-4 grid grid-cols-2 gap-4 rounded-lg bg-slate-50 p-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Scheduled</p>
+                <p className="mt-1 text-sm text-slate-900">{formatDateTime(adjustVisit.start_time)}</p>
+                <p className="text-sm text-slate-900">{formatDateTime(adjustVisit.end_time)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Actual</p>
+                {adjustVisit.check_in_at ? (
+                  <>
+                    <p className="mt-1 text-sm text-emerald-700">{formatDateTime(adjustVisit.check_in_at)}</p>
+                    <p className="text-sm text-emerald-700">{adjustVisit.check_out_at ? formatDateTime(adjustVisit.check_out_at) : "—"}</p>
+                    {(adjustVisit.break_minutes ?? 0) > 0 && <p className="text-xs text-slate-500">{adjustVisit.break_minutes}m break</p>}
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm text-slate-400">No actuals recorded</p>
+                )}
+              </div>
+              {adjustVisit.check_in_at && adjustVisit.check_out_at && (
+                <div className="col-span-2 border-t border-slate-200 pt-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Variance</p>
+                  {(() => {
+                    const schedMins = (new Date(adjustVisit.end_time).getTime() - new Date(adjustVisit.start_time).getTime()) / 60000;
+                    const actMins = (new Date(adjustVisit.check_out_at!).getTime() - new Date(adjustVisit.check_in_at!).getTime()) / 60000 - (adjustVisit.break_minutes ?? 0);
+                    const diff = Math.round(actMins - schedMins);
+                    return (
+                      <p className={`text-sm font-medium ${diff > 0 ? "text-amber-600" : diff < 0 ? "text-red-600" : "text-slate-600"}`}>
+                        {diff > 0 ? "+" : ""}{diff} minutes
+                      </p>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+
+            {/* Adjust form */}
+            <form onSubmit={handleAdjustSubmit} className="mt-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Check-in time</label>
+                  <input
+                    name="check_in_at" type="datetime-local"
+                    defaultValue={adjustVisit.check_in_at ? toLocalDatetimeLocal(adjustVisit.check_in_at) : ""}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none ring-blue-600 focus:ring-2"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Check-out time</label>
+                  <input
+                    name="check_out_at" type="datetime-local"
+                    defaultValue={adjustVisit.check_out_at ? toLocalDatetimeLocal(adjustVisit.check_out_at) : ""}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none ring-blue-600 focus:ring-2"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Break (minutes)</label>
+                <input
+                  name="break_minutes" type="number" min="0"
+                  defaultValue={adjustVisit.break_minutes ?? 0}
+                  className="w-32 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none ring-blue-600 focus:ring-2"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Reason *</label>
+                <textarea
+                  name="reason" required rows={2}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none ring-blue-600 focus:ring-2"
+                  placeholder="Required — explain why this adjustment is being made"
+                />
+              </div>
+              {error && <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
+              <div className="flex gap-3">
+                <button type="submit" disabled={submitting} className="rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-violet-500 disabled:opacity-60">
+                  {submitting ? "Saving…" : "Save Adjustment"}
+                </button>
+                <button type="button" onClick={() => { setAdjustVisit(null); setError(""); }} className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+                  Cancel
+                </button>
+              </div>
+            </form>
+
+            {/* Adjustment history */}
+            {adjustLoading ? (
+              <p className="mt-6 text-sm text-slate-500">Loading history…</p>
+            ) : adjustments.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Adjustment History</h3>
+                <div className="mt-3 space-y-3">
+                  {adjustments.map((adj) => (
+                    <div key={adj.id} className="border-l-2 border-violet-200 pl-3">
+                      <p className="text-xs font-medium text-slate-900">
+                        {adj.adjusted_field.replace(/_/g, " ")}
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        {adj.before_value ?? "—"} → {adj.after_value ?? "—"}
+                      </p>
+                      <p className="text-[10px] text-slate-600 italic">{adj.reason}</p>
+                      <p className="text-[10px] text-slate-400">
+                        {new Date(adj.adjusted_at).toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

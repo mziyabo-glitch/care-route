@@ -46,6 +46,9 @@ export async function PATCH(
   if (body.role !== undefined) {
     updates.role = (body.role as string)?.trim().toLowerCase() || "carer";
   }
+  if (body.payroll_number !== undefined) {
+    updates.payroll_number = (body.payroll_number as string)?.trim() || null;
+  }
   if (body.active !== undefined) {
     updates.active = !!body.active;
   }
@@ -56,7 +59,7 @@ export async function PATCH(
     .update(updates)
     .eq("id", id)
     .eq("agency_id", agencyId)
-    .select("id, name, full_name, email, phone, role, active")
+    .select("id, name, full_name, email, phone, role, payroll_number, active")
     .single();
 
   if (error) {

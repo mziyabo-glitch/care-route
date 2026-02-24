@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentAgencyId } from "@/lib/agency";
 
-const STATUSES = ["scheduled", "completed", "missed"] as const;
+const STATUSES = ["scheduled", "in_progress", "completed", "missed"] as const;
 
 export async function POST(request: Request) {
   const agencyId = await getCurrentAgencyId();

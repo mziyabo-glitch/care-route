@@ -31,12 +31,13 @@ export default async function DashboardLayout({
 
   const { role } = await getCurrentRole();
   const canAccessBilling = role === "owner" || role === "admin" || role === "manager";
+  const canAccessPayroll = role === "owner" || role === "admin";
 
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
-          <DashboardNav canAccessBilling={canAccessBilling} />
+          <DashboardNav canAccessBilling={canAccessBilling} canAccessPayroll={canAccessPayroll} />
           <div className="flex items-center gap-4">
             <span className="text-sm text-slate-500">{user.email}</span>
             <LogoutButton />

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentAgencyId } from "@/lib/agency";
 
-const STATUSES = ["scheduled", "completed", "missed"] as const;
+const STATUSES = ["scheduled", "in_progress", "completed", "missed"] as const;
 
 export async function PATCH(
   request: Request,
@@ -30,7 +30,7 @@ export async function PATCH(
     const reqStatus = (body.status as string)?.trim() || undefined;
     if (reqStatus && !STATUSES.includes(reqStatus as (typeof STATUSES)[number])) {
       return NextResponse.json(
-        { error: "Status must be scheduled, completed, or missed" },
+        { error: "Status must be scheduled, in_progress, completed, or missed" },
         { status: 400 }
       );
     }
@@ -79,7 +79,7 @@ export async function PATCH(
   // Status-only update
   if (!status || !STATUSES.includes(status as (typeof STATUSES)[number])) {
     return NextResponse.json(
-      { error: "Status must be scheduled, completed, or missed" },
+      { error: "Status must be scheduled, in_progress, completed, or missed" },
       { status: 400 }
     );
   }

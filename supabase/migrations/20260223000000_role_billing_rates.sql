@@ -21,9 +21,10 @@ BEGIN
     UPDATE public.carers SET role = lower(trim(role)) WHERE role IS NOT NULL;
     UPDATE public.carers SET role = 'carer'
       WHERE role IS NULL OR role = '' OR role NOT IN ('carer','senior','nurse','manager');
-    ALTER TABLE public.carers ALTER COLUMN role SET DEFAULT 'carer';
+    ALTER TABLE public.carers ALTER COLUMN role DROP DEFAULT;
     ALTER TABLE public.carers
       ALTER COLUMN role TYPE public.carer_role USING role::public.carer_role;
+    ALTER TABLE public.carers ALTER COLUMN role SET DEFAULT 'carer'::carer_role;
     ALTER TABLE public.carers ALTER COLUMN role SET NOT NULL;
   END IF;
 END $$;

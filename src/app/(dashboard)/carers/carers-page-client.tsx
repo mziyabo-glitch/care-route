@@ -10,6 +10,7 @@ type Carer = {
   phone: string | null;
   role: string | null;
   active: boolean | null;
+  payroll_number: string | null;
 };
 
 const CARER_ROLES = [
@@ -46,6 +47,7 @@ export function CarersPageClient({
       email: (fd.get("email") as string)?.trim() || null,
       phone: (fd.get("phone") as string)?.trim() || null,
       role: (fd.get("role") as string)?.trim() || null,
+      payroll_number: (fd.get("payroll_number") as string)?.trim() || null,
       active: true,
     };
     const res = await fetch("/api/carers", {
@@ -75,6 +77,7 @@ export function CarersPageClient({
       email: (fd.get("email") as string)?.trim() || null,
       phone: (fd.get("phone") as string)?.trim() || null,
       role: (fd.get("role") as string)?.trim() || null,
+      payroll_number: (fd.get("payroll_number") as string)?.trim() || null,
       active: fd.get("active") === "on",
     };
     const res = await fetch(`/api/carers/${editCarer.id}`, {
@@ -182,6 +185,21 @@ export function CarersPageClient({
                   ))}
                 </select>
               </div>
+              <div>
+                <label
+                  htmlFor="add-payroll"
+                  className="mb-1 block text-sm font-medium text-slate-700"
+                >
+                  Payroll #
+                </label>
+                <input
+                  id="add-payroll"
+                  name="payroll_number"
+                  type="text"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
+                  placeholder="e.g. EMP001"
+                />
+              </div>
             </div>
             {error ? (
               <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -217,6 +235,9 @@ export function CarersPageClient({
                     Role
                   </th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-slate-700">
+                    Payroll #
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                     Active
                   </th>
                   <th className="px-4 py-3 text-right text-sm font-medium text-slate-700">
@@ -228,7 +249,7 @@ export function CarersPageClient({
                 {initialCarers.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-4 py-8 text-center text-sm text-slate-500"
                     >
                       No carers yet. Add your first carer above.
@@ -248,6 +269,9 @@ export function CarersPageClient({
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600">
                         {formatCarerRole(c.role)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 tabular-nums">
+                        {c.payroll_number ?? "—"}
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -354,6 +378,18 @@ export function CarersPageClient({
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Payroll #
+                </label>
+                <input
+                  name="payroll_number"
+                  type="text"
+                  defaultValue={editCarer.payroll_number ?? ""}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-blue-600 focus:ring-2"
+                  placeholder="e.g. EMP001"
+                />
               </div>
               <div className="flex items-center gap-2">
                 <input

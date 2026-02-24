@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { VisitsPageClient } from "./visits-page-client";
 import { getCurrentAgencyId } from "@/lib/agency";
+import { getCurrentRole } from "@/lib/permissions";
 
 export default async function VisitsPage() {
   const agencyId = await getCurrentAgencyId();
@@ -11,10 +12,12 @@ export default async function VisitsPage() {
     { data: visitsRaw, error: visitsError },
     { data: clientsRaw },
     { data: carersRaw },
+    { role },
   ] = await Promise.all([
     supabase.rpc("list_visits", { p_agency_id: agencyId }),
     supabase.rpc("list_clients_for_selection", { p_agency_id: agencyId }),
     supabase.rpc("list_carers_for_selection", { p_agency_id: agencyId }),
+    getCurrentRole(),
   ]);
 
   const visits = Array.isArray(visitsRaw) ? visitsRaw : [];
@@ -34,6 +37,7 @@ export default async function VisitsPage() {
         initialVisits={visits}
         clients={clients}
         carers={carers}
+        userRole={role}
       />
     </div>
   );
