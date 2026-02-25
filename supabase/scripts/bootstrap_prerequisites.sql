@@ -4262,6 +4262,12 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
   details jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+-- Backfill columns if table existed from an older schema
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS user_id uuid;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS action text;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS entity_type text;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS entity_id uuid;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS details jsonb;
 CREATE INDEX IF NOT EXISTS idx_audit_logs_agency ON public.audit_logs(agency_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON public.audit_logs(entity_type, entity_id);
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
