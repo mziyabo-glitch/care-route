@@ -2,11 +2,70 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentRole } from "@/lib/permissions";
 
+type TimesheetRow = {
+  id: string;
+  period_start: string;
+  period_end: string;
+  status: string;
+  approved_at: string | null;
+  exported_at: string | null;
+};
+
+type TimesheetLineRow = {
+  timesheet_id: string;
+  total_minutes: number | null;
+};
+
+function isListTimesheetsRpcMissing(error: { message: string; code?: string | null }) {
+  const message = error.message.toLowerCase();
+  return (
+    (error.code ?? "").startsWith("PGRST") ||
+    message.includes("could not find the function") ||
+    message.includes("schema cache")
+  );
+}
+
+async function listTimesheetsFallback(agencyId: string) {
+  const supabase = await createClient();
+  const { data: timesheets, error: timesheetsError } = await supabase
+    .from("timesheets")
+    .select("id, period_start, period_end, status, approved_at, exported_at")
+    .eq("agency_id", agencyId)
+    .order("period_start", { ascending: false });
+  if (timesheetsError) throw timesheetsError;
+
+  const typedTimesheets = (timesheets ?? []) as TimesheetRow[];
+  if (typedTimesheets.length === 0) return [];
+
+  const ids = typedTimesheets.map((t) => t.id);
+  const { data: lines, error: linesError } = await supabase
+    .from("timesheet_lines")
+    .select("timesheet_id, total_minutes")
+    .in("timesheet_id", ids);
+  if (linesError) throw linesError;
+
+  const aggregates = new Map<string, { line_count: number; total_minutes: number }>();
+  for (const row of (lines ?? []) as TimesheetLineRow[]) {
+    const current = aggregates.get(row.timesheet_id) ?? { line_count: 0, total_minutes: 0 };
+    current.line_count += 1;
+    current.total_minutes += row.total_minutes ?? 0;
+    aggregates.set(row.timesheet_id, current);
+  }
+
+  return typedTimesheets.map((t) => {
+    const totals = aggregates.get(t.id) ?? { line_count: 0, total_minutes: 0 };
+    return {
+      ...t,
+      line_count: totals.line_count,
+      total_minutes: totals.total_minutes,
+    };
+  });
+}
+
 function rpcErrorResponse(error: { message: string; code?: string | null }) {
   const isDev = process.env.NODE_ENV !== "production";
   const isClientError =
-    (error.code ?? "").startsWith("PGRST") ||
-    error.message.toLowerCase().includes("could not find the function");
+    isListTimesheetsRpcMissing(error);
   const status = isClientError ? 400 : 500;
   const fallbackMessage = status === 400 ? "Invalid payroll request" : "Failed to load payroll data";
   return NextResponse.json(
@@ -24,7 +83,21 @@ export async function GET() {
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("list_timesheets", { p_agency_id: agencyId });
-  if (error) return rpcErrorResponse(error);
+  if (error) {
+    if (isListTimesheetsRpcMissing(error)) {
+      try {
+        const fallbackRows = await listTimesheetsFallback(agencyId);
+        return NextResponse.json({ timesheets: fallbackRows });
+      } catch (fallbackError) {
+        const message =
+          fallbackError && typeof fallbackError === "object" && "message" in fallbackError
+            ? String((fallbackError as { message?: unknown }).message ?? "")
+            : "Failed to load payroll data";
+        return rpcErrorResponse({ message, code: null });
+      }
+    }
+    return rpcErrorResponse(error);
+  }
   return NextResponse.json({ timesheets: Array.isArray(data) ? data : [] });
 }
 
