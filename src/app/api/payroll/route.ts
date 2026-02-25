@@ -143,6 +143,14 @@ export async function POST(request: Request) {
     p_period_end: periodEnd,
   });
 
-  if (error) return rpcErrorResponse(error);
+  if (error) {
+    if (isSchemaDriftError(error)) {
+      return NextResponse.json(
+        { error: "Payroll tables are not set up yet. Please run the bootstrap SQL in Supabase SQL Editor." },
+        { status: 400 }
+      );
+    }
+    return rpcErrorResponse(error);
+  }
   return NextResponse.json(data);
 }
