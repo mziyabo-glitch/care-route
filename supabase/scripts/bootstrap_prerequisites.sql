@@ -4663,3 +4663,6 @@ REVOKE ALL ON FUNCTION public.get_timesheet_detail(uuid) FROM public;
 GRANT EXECUTE ON FUNCTION public.get_timesheet_detail(uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.get_visit_adjustments(uuid) FROM public;
 GRANT EXECUTE ON FUNCTION public.get_visit_adjustments(uuid) TO authenticated;
+
+-- IMPORTANT: Reload PostgREST schema cache so new functions are discoverable via API
+NOTIFY pgrst, 'reload schema';
