@@ -25,6 +25,20 @@ function isListTimesheetsRpcMissing(error: { message: string; code?: string | nu
   );
 }
 
+function isSchemaDriftError(error: { message: string; code?: string | null }) {
+  const code = error.code ?? "";
+  const message = error.message.toLowerCase();
+  return (
+    code === "42P01" || // undefined_table
+    code === "42703" || // undefined_column
+    code.startsWith("PGRST") ||
+    message.includes("schema cache") ||
+    message.includes("could not find the function") ||
+    message.includes("relation") && message.includes("does not exist") ||
+    message.includes("column") && message.includes("does not exist")
+  );
+}
+
 async function listTimesheetsFallback(agencyId: string) {
   const supabase = await createClient();
   const { data: timesheets, error: timesheetsError } = await supabase
@@ -84,19 +98,26 @@ export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("list_timesheets", { p_agency_id: agencyId });
   if (error) {
-    if (isListTimesheetsRpcMissing(error)) {
-      try {
-        const fallbackRows = await listTimesheetsFallback(agencyId);
-        return NextResponse.json({ timesheets: fallbackRows });
-      } catch (fallbackError) {
-        const message =
-          fallbackError && typeof fallbackError === "object" && "message" in fallbackError
-            ? String((fallbackError as { message?: unknown }).message ?? "")
-            : "Failed to load payroll data";
-        return rpcErrorResponse({ message, code: null });
+    try {
+      const fallbackRows = await listTimesheetsFallback(agencyId);
+      return NextResponse.json({ timesheets: fallbackRows });
+    } catch (fallbackError) {
+      const message =
+        fallbackError && typeof fallbackError === "object" && "message" in fallbackError
+          ? String((fallbackError as { message?: unknown }).message ?? "")
+          : "Failed to load payroll data";
+      const code =
+        fallbackError && typeof fallbackError === "object" && "code" in fallbackError
+          ? String((fallbackError as { code?: unknown }).code ?? "")
+          : null;
+      if (isSchemaDriftError({ message, code })) {
+        return NextResponse.json({ timesheets: [] });
       }
+      if (isListTimesheetsRpcMissing(error)) {
+        return rpcErrorResponse({ message, code });
+      }
+      return rpcErrorResponse(error);
     }
-    return rpcErrorResponse(error);
   }
   return NextResponse.json({ timesheets: Array.isArray(data) ? data : [] });
 }
