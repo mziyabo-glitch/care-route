@@ -49,6 +49,7 @@ export default function PayrollPage() {
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
   const [generating, setGenerating] = useState(false);
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
@@ -56,13 +57,34 @@ export default function PayrollPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
 
+  function getErrorMessage(data: unknown, fallback: string) {
+    if (data && typeof data === "object" && "error" in data && typeof (data as { error: unknown }).error === "string") {
+      return (data as { error: string }).error;
+    }
+    return fallback;
+  }
+
   const loadTimesheets = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/payroll");
-    const data = await res.json();
-    if (!res.ok) { setError(data.error); setLoading(false); return; }
-    setTimesheets(data.timesheets ?? []);
-    setLoading(false);
+    setError("");
+    try {
+      const res = await fetch("/api/payroll");
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = getErrorMessage(data, "Failed to load payroll");
+        setError(message);
+        setToast(message);
+        return;
+      }
+      const next = data && typeof data === "object" && "timesheets" in data ? (data as { timesheets?: unknown }).timesheets : [];
+      setTimesheets(Array.isArray(next) ? (next as Timesheet[]) : []);
+    } catch {
+      const message = "Failed to load payroll";
+      setError(message);
+      setToast(message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { loadTimesheets(); }, [loadTimesheets]);
@@ -72,37 +94,79 @@ export default function PayrollPage() {
     if (!periodStart || !periodEnd) return;
     setError("");
     setGenerating(true);
-    const res = await fetch("/api/payroll", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ period_start: periodStart, period_end: periodEnd }),
-    });
-    const data = await res.json();
-    setGenerating(false);
-    if (!res.ok) { setError(data.error ?? "Failed to generate"); return; }
-    await loadTimesheets();
-    if (data.id) loadDetail(data.id);
+    try {
+      const res = await fetch("/api/payroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ period_start: periodStart, period_end: periodEnd }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = getErrorMessage(data, "Failed to generate");
+        setError(message);
+        setToast(message);
+        return;
+      }
+      await loadTimesheets();
+      if (data && typeof data === "object" && "id" in data && typeof (data as { id?: unknown }).id === "string") {
+        loadDetail((data as { id: string }).id);
+      }
+    } catch {
+      const message = "Failed to generate";
+      setError(message);
+      setToast(message);
+    } finally {
+      setGenerating(false);
+    }
   }
 
   async function loadDetail(id: string) {
     setLoadingDetail(true);
     setDetail(null);
-    const res = await fetch(`/api/payroll/${id}`);
-    const data = await res.json();
-    setLoadingDetail(false);
-    if (!res.ok) { setError(data.error ?? "Failed to load detail"); return; }
-    setDetail(data);
+    try {
+      const res = await fetch(`/api/payroll/${id}`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = getErrorMessage(data, "Failed to load detail");
+        setError(message);
+        setToast(message);
+        return;
+      }
+      if (data && typeof data === "object" && "id" in data) {
+        setDetail(data as TimesheetDetail);
+      } else {
+        setError("Failed to load detail");
+      }
+    } catch {
+      const message = "Failed to load detail";
+      setError(message);
+      setToast(message);
+    } finally {
+      setLoadingDetail(false);
+    }
   }
 
   async function handleApprove(id: string) {
     setError("");
     setActionLoading(id);
-    const res = await fetch(`/api/payroll/${id}/approve`, { method: "POST" });
-    const data = await res.json();
-    setActionLoading("");
-    if (!res.ok) { setError(data.error ?? "Failed to approve"); return; }
-    await loadTimesheets();
-    if (detail?.id === id) loadDetail(id);
+    try {
+      const res = await fetch(`/api/payroll/${id}/approve`, { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = getErrorMessage(data, "Failed to approve");
+        setError(message);
+        setToast(message);
+        return;
+      }
+      await loadTimesheets();
+      if (detail?.id === id) loadDetail(id);
+    } catch {
+      const message = "Failed to approve";
+      setError(message);
+      setToast(message);
+    } finally {
+      setActionLoading("");
+    }
   }
 
   function handleExport(id: string) {
@@ -113,6 +177,7 @@ export default function PayrollPage() {
     <>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900">Payroll</h1>
+        {loading && <span className="text-xs text-slate-500">Loading…</span>}
       </div>
 
       {/* Generate */}
@@ -145,6 +210,12 @@ export default function PayrollPage() {
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-3 text-sm text-red-700">
           {error}
+          <button
+            onClick={loadTimesheets}
+            className="ml-3 text-xs font-medium underline"
+          >
+            Retry
+          </button>
           <button onClick={() => setError("")} className="ml-3 text-xs font-medium underline">Dismiss</button>
         </div>
       )}
@@ -261,6 +332,18 @@ export default function PayrollPage() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+          <span className="text-sm text-slate-700">{toast}</span>
+          <button
+            type="button"
+            onClick={() => setToast("")}
+            className="text-slate-400 hover:text-slate-600"
+          >
+            ✕
+          </button>
         </div>
       )}
     </>

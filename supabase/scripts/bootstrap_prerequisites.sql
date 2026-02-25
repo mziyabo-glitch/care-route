@@ -1,4 +1,4 @@
-﻿-- BOOTSTRAP: Run this file FIRST in Supabase SQL Editor if you have a fresh database.
+-- BOOTSTRAP: Run this file FIRST in Supabase SQL Editor if you have a fresh database.
 -- Then run 20260224000000_visit_actuals_payroll.sql
 
 -- ========== 20260217213000_multi_tenant_agencies.sql ==========
@@ -206,8 +206,9 @@ create table if not exists public.visits (
   agency_id uuid not null references public.agencies (id) on delete cascade,
   client_id uuid not null references public.clients (id) on delete cascade,
   carer_id uuid not null references public.carers (id) on delete cascade,
-  scheduled_at timestamptz not null,
-  status text not null default 'scheduled' check (status in ('scheduled', 'completed', 'cancelled')),
+  start_time timestamptz not null default now(),
+  end_time timestamptz not null default (now() + interval '1 hour'),
+  status text not null default 'scheduled' check (status in ('scheduled', 'completed', 'missed')),
   notes text,
   created_at timestamptz not null default now()
 );
@@ -217,7 +218,18 @@ create index if not exists idx_carers_agency_id on public.carers (agency_id);
 create index if not exists idx_visits_agency_id on public.visits (agency_id);
 create index if not exists idx_visits_client_id on public.visits (client_id);
 create index if not exists idx_visits_carer_id on public.visits (carer_id);
-create index if not exists idx_visits_scheduled_at on public.visits (scheduled_at);
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'visits'
+      and column_name = 'scheduled_at'
+  ) then
+    create index if not exists idx_visits_scheduled_at on public.visits (scheduled_at);
+  end if;
+end $$;
 
 alter table public.clients enable row level security;
 alter table public.carers enable row level security;
@@ -847,14 +859,23 @@ grant execute on function public.archive_carer(uuid) to authenticated;
 
 -- ========== 20260218160000_visits_schema_rpcs.sql ==========
 -- Visits schema: start_time, end_time, status (scheduled|completed|missed), FKs on delete restrict.
+-- Only migrate if visits is a base table with the legacy scheduled_at column.
 
--- Add new columns if migrating from scheduled_at
-alter table public.visits add column if not exists start_time timestamptz;
-alter table public.visits add column if not exists end_time timestamptz;
-
--- Migrate existing data: scheduled_at -> start_time, end_time (if scheduled_at exists)
 do $$
 begin
+  -- Guard: only run migration when visits is a BASE TABLE (not a view)
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'visits' and table_type = 'BASE TABLE'
+  ) then
+    return;
+  end if;
+
+  -- Add new columns if migrating from scheduled_at
+  alter table public.visits add column if not exists start_time timestamptz;
+  alter table public.visits add column if not exists end_time timestamptz;
+
+  -- Migrate existing data: scheduled_at -> start_time, end_time
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'visits' and column_name = 'scheduled_at'
@@ -865,32 +886,32 @@ begin
     where start_time is null and scheduled_at is not null;
     alter table public.visits drop column scheduled_at;
   end if;
+
+  -- Backfill any remaining nulls
+  update public.visits
+  set start_time = coalesce(start_time, now()),
+      end_time = coalesce(end_time, now() + interval '1 hour')
+  where start_time is null or end_time is null;
+
+  -- Set not null
+  alter table public.visits alter column start_time set not null;
+  alter table public.visits alter column end_time set not null;
+
+  -- Update status constraint: scheduled, completed, missed (map cancelled -> missed)
+  update public.visits set status = 'missed' where status = 'cancelled';
+  alter table public.visits drop constraint if exists visits_status_check;
+  alter table public.visits add constraint visits_status_check
+    check (status in ('scheduled', 'completed', 'missed'));
+
+  -- Change FKs to ON DELETE RESTRICT
+  alter table public.visits drop constraint if exists visits_client_id_fkey;
+  alter table public.visits add constraint visits_client_id_fkey
+    foreign key (client_id) references public.clients(id) on delete restrict;
+
+  alter table public.visits drop constraint if exists visits_carer_id_fkey;
+  alter table public.visits add constraint visits_carer_id_fkey
+    foreign key (carer_id) references public.carers(id) on delete restrict;
 end $$;
-
--- Backfill any remaining nulls (e.g. empty table) with a default
-update public.visits
-set start_time = coalesce(start_time, now()),
-    end_time = coalesce(end_time, now() + interval '1 hour')
-where start_time is null or end_time is null;
-
--- Set not null
-alter table public.visits alter column start_time set not null;
-alter table public.visits alter column end_time set not null;
-
--- Update status constraint: scheduled, completed, missed (map cancelled -> missed)
-update public.visits set status = 'missed' where status = 'cancelled';
-alter table public.visits drop constraint if exists visits_status_check;
-alter table public.visits add constraint visits_status_check
-  check (status in ('scheduled', 'completed', 'missed'));
-
--- Change FKs to ON DELETE RESTRICT
-alter table public.visits drop constraint if exists visits_client_id_fkey;
-alter table public.visits add constraint visits_client_id_fkey
-  foreign key (client_id) references public.clients(id) on delete restrict;
-
-alter table public.visits drop constraint if exists visits_carer_id_fkey;
-alter table public.visits add constraint visits_carer_id_fkey
-  foreign key (carer_id) references public.carers(id) on delete restrict;
 
 -- Indexes
 drop index if exists public.idx_visits_scheduled_at;
@@ -3085,7 +3106,8 @@ alter table public.visits add column if not exists actual_end_time timestamptz;
 
 -- 4) Create view v_visit_billing
 -- billable_minutes override if set, else actual duration if available, else planned duration
-create or replace view public.v_visit_billing as
+drop view if exists public.v_visit_billing;
+create view public.v_visit_billing as
 select
   v.id as visit_id,
   v.agency_id,
@@ -4133,6 +4155,53 @@ BEGIN
 END;
 $$;
 
+-- 14) list_timesheets: returns payroll timesheets for an agency
+CREATE OR REPLACE FUNCTION public.list_timesheets(p_agency_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE v_user_id uuid; v_role text; v_rows jsonb;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
+
+  SELECT am.role INTO v_role
+  FROM public.agency_members am
+  WHERE am.user_id = v_user_id AND am.agency_id = p_agency_id
+  LIMIT 1;
+
+  IF v_role IS NULL OR v_role NOT IN ('owner', 'admin') THEN
+    RAISE EXCEPTION 'Only admins can view timesheets';
+  END IF;
+
+  SELECT coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', t.id,
+        'period_start', t.period_start,
+        'period_end', t.period_end,
+        'status', t.status,
+        'approved_at', t.approved_at,
+        'exported_at', t.exported_at,
+        'line_count', (
+          SELECT count(*) FROM public.timesheet_lines tl WHERE tl.timesheet_id = t.id
+        ),
+        'total_minutes', (
+          SELECT coalesce(sum(tl.total_minutes), 0) FROM public.timesheet_lines tl WHERE tl.timesheet_id = t.id
+        )
+      )
+      ORDER BY t.period_start DESC
+    ),
+    '[]'::jsonb
+  )
+  INTO v_rows
+  FROM public.timesheets t
+  WHERE t.agency_id = p_agency_id;
+
+  RETURN v_rows;
+END;
+$$;
+
 -- Grants
 REVOKE ALL ON FUNCTION public.list_billing_rates(uuid, uuid) FROM public;
 GRANT EXECUTE ON FUNCTION public.list_billing_rates(uuid, uuid) TO authenticated;
@@ -4148,6 +4217,9 @@ GRANT EXECUTE ON FUNCTION public.insert_carer(uuid, text, text, text, text, bool
 
 REVOKE ALL ON FUNCTION public.list_carers(uuid) FROM public;
 GRANT EXECUTE ON FUNCTION public.list_carers(uuid) TO authenticated;
+
+REVOKE ALL ON FUNCTION public.list_timesheets(uuid) FROM public;
+GRANT EXECUTE ON FUNCTION public.list_timesheets(uuid) TO authenticated;
 
 REVOKE ALL ON FUNCTION public.list_billing_summary(uuid, timestamptz, timestamptz) FROM public;
 GRANT EXECUTE ON FUNCTION public.list_billing_summary(uuid, timestamptz, timestamptz) TO authenticated;
