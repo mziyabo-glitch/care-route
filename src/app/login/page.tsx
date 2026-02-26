@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type AuthMode = "password" | "magic-link";
@@ -12,8 +11,11 @@ type AuthAction =
   | "forgot-password"
   | null;
 
+function redirectToDashboard() {
+  window.location.href = "/dashboard";
+}
+
 export default function LoginPage() {
-  const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,19 +25,26 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    const checkExistingSession = async () => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    const supabase = createClient();
 
-      if (user) {
-        router.replace("/dashboard");
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        redirectToDashboard();
+        return;
       }
     };
 
-    void checkExistingSession();
-  }, [router]);
+    void checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) redirectToDashboard();
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const normalizeErrorMessage = (message: string) => {
     const lower = message.toLowerCase();
@@ -63,7 +72,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.replace("/dashboard");
+    redirectToDashboard();
   };
 
   const handlePasswordSignUp = async () => {
@@ -79,7 +88,7 @@ export default function LoginPage() {
     }
 
     if (data.session) {
-      router.replace("/dashboard");
+      redirectToDashboard();
       return;
     }
 
