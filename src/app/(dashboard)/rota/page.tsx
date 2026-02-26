@@ -180,6 +180,7 @@ export default function RotaPage() {
   const carerFilterRef = useRef<HTMLDivElement>(null);
   const [riskLoading, setRiskLoading] = useState<string | null>(null);
   const [visitRisk, setVisitRisk] = useState<Record<string, { risk_score: number; risk_band: string; factors: RiskFactors }>>({});
+  const [riskRecalcLoading, setRiskRecalcLoading] = useState(false);
 
   useEffect(() => {
     if (!carerFilterOpen) return;
@@ -509,9 +510,32 @@ export default function RotaPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-slate-900">Rota</h1>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={riskRecalcLoading || loading}
+            onClick={async () => {
+              setRiskRecalcLoading(true);
+              try {
+                const res = await fetch(
+                  `/api/rota/risk-recalc?weekStart=${encodeURIComponent(start.toISOString())}&weekEnd=${encodeURIComponent(end.toISOString())}`,
+                  { method: "POST" }
+                );
+                const data = await res.json();
+                if (res.ok) {
+                  await fetchData();
+                  setToast({ message: `Risk recalculated for ${data.count ?? 0} visits` });
+                }
+              } finally {
+                setRiskRecalcLoading(false);
+              }
+            }}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 disabled:opacity-60"
+          >
+            {riskRecalcLoading ? "Recalculating…" : "Recalculate risk"}
+          </button>
           <button
             type="button"
             onClick={goToday}
