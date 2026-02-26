@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 type Carer = { id: string; name: string | null };
 type Assignment = { carer_id: string; carer_name: string | null; role: string };
+type RiskFactors = Record<string, { value: unknown; points: number }>;
+
 type Visit = {
   id: string;
   client_id: string;
@@ -24,6 +26,9 @@ type Visit = {
   end_time: string;
   status: string;
   notes: string | null;
+  risk_score?: number | null;
+  risk_band?: string | null;
+  risk_factors?: RiskFactors | null;
 };
 
 type VisitWithContext = Visit & {
@@ -89,6 +94,30 @@ function getStatusBadge(status: string) {
   }
 }
 
+function getRiskBandClass(band: string) {
+  switch (band) {
+    case "low": return "bg-emerald-100 text-emerald-700";
+    case "medium": return "bg-amber-100 text-amber-700";
+    case "high": return "bg-red-100 text-red-700";
+    default: return "bg-slate-100 text-slate-600";
+  }
+}
+
+function RiskChip({ visit, compact = false }: { visit: Visit; compact?: boolean }) {
+  if (visit.risk_band) {
+    return (
+      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${getRiskBandClass(visit.risk_band)}`}>
+        {compact ? visit.risk_band : `Risk: ${visit.risk_band}`}
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+      Calculating…
+    </span>
+  );
+}
+
 /** Postcode heuristic fallback when no geolocation or server cache available */
 function estimateTravelFallback(postcodeA: string | null | undefined, postcodeB: string | null | undefined): number {
   const a = (postcodeA ?? "").toUpperCase().trim();
@@ -149,6 +178,8 @@ export default function RotaPage() {
   const [issuesOnly, setIssuesOnly] = useState(false);
   const [carerFilterOpen, setCarerFilterOpen] = useState(false);
   const carerFilterRef = useRef<HTMLDivElement>(null);
+  const [riskLoading, setRiskLoading] = useState<string | null>(null);
+  const [visitRisk, setVisitRisk] = useState<Record<string, { risk_score: number; risk_band: string; factors: RiskFactors }>>({});
 
   useEffect(() => {
     if (!carerFilterOpen) return;
@@ -160,6 +191,17 @@ export default function RotaPage() {
     document.addEventListener("mousedown", onOutside);
     return () => document.removeEventListener("mousedown", onOutside);
   }, [carerFilterOpen]);
+
+  useEffect(() => {
+    if (!selectedVisit?.id || selectedVisit.risk_score != null) return;
+    setRiskLoading(selectedVisit.id);
+    fetch(`/api/visits/${selectedVisit.id}/risk`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.risk_score != null) setVisitRisk((prev) => ({ ...prev, [selectedVisit.id]: data }));
+      })
+      .finally(() => setRiskLoading(null));
+  }, [selectedVisit?.id, selectedVisit?.risk_score]);
 
   const toggleDaySelection = useCallback((dayKey: string) => {
     setSelectedDays((prev) => {
@@ -863,6 +905,7 @@ export default function RotaPage() {
                                       )}
                                       {/* Badge row */}
                                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                        <RiskChip visit={v} compact />
                                         <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${getStatusBadge(v.status)}`}>
                                           {v.status}
                                         </span>
@@ -1143,6 +1186,71 @@ export default function RotaPage() {
                   <dd className="mt-0.5 text-slate-700">{selectedVisit.notes}</dd>
                 </div>
               )}
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Risk</dt>
+                <dd className="mt-1 flex flex-wrap items-center gap-2">
+                  {(selectedVisit.risk_band || visitRisk[selectedVisit.id]) ? (
+                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${getRiskBandClass(visitRisk[selectedVisit.id]?.risk_band ?? selectedVisit.risk_band ?? "low")}`}>
+                      {(visitRisk[selectedVisit.id]?.risk_score ?? selectedVisit.risk_score ?? 0)} – {visitRisk[selectedVisit.id]?.risk_band ?? selectedVisit.risk_band ?? "low"}
+                    </span>
+                  ) : (
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-500">Calculating…</span>
+                  )}
+                  <button
+                    type="button"
+                    disabled={riskLoading === selectedVisit.id}
+                    onClick={async () => {
+                      setRiskLoading(selectedVisit.id);
+                      try {
+                        const res = await fetch(`/api/visits/${selectedVisit.id}/risk`, { method: "POST" });
+                        const data = await res.json();
+                        if (res.ok && data.risk_score != null) {
+                          setVisitRisk((prev) => ({ ...prev, [selectedVisit.id]: data }));
+                          fetchData();
+                        }
+                      } finally {
+                        setRiskLoading(null);
+                      }
+                    }}
+                    className="rounded-md border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {riskLoading === selectedVisit.id ? "Recalculating…" : "Recalculate"}
+                  </button>
+                </dd>
+              </div>
+              {(() => {
+                const factors = visitRisk[selectedVisit.id]?.factors ?? selectedVisit.risk_factors;
+                if (!factors || typeof factors !== "object") return null;
+                const entries = Object.entries(factors);
+                if (entries.length === 0) return null;
+                const labels: Record<string, string> = {
+                  lateness_rate_14d: "Lateness rate (14d)",
+                  travel_minutes: "Travel before visit (min)",
+                  visits_today: "Visits today",
+                  double_up: "Requires double-up",
+                  new_client: "New client",
+                  overrun_flag: "Overrun flag (14d)",
+                };
+                return (
+                  <div>
+                    <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Risk breakdown</dt>
+                    <dd className="mt-2 space-y-1.5">
+                      {entries.map(([key, f]) => {
+                        const val = (f as { value?: unknown; points?: number }).value;
+                        const pts = (f as { value?: unknown; points?: number }).points ?? 0;
+                        const label = labels[key] ?? key;
+                        const display = typeof val === "boolean" ? (val ? "Yes" : "No") : String(val);
+                        return (
+                          <div key={key} className="flex justify-between text-sm">
+                            <span className="text-slate-600">{label}: {display}</span>
+                            <span className="font-medium text-slate-900">+{pts}</span>
+                          </div>
+                        );
+                      })}
+                    </dd>
+                  </div>
+                );
+              })()}
             </dl>
             <div className="mt-8 flex gap-3">
               <a

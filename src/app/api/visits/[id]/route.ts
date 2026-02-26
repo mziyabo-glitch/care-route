@@ -73,6 +73,7 @@ export async function PATCH(
         { status: isConflict ? 409 : 500 }
       );
     }
+    supabase.rpc("calculate_visit_risk", { p_visit_id: id }).then(() => {}, () => {});
     return NextResponse.json({ success: true });
   }
 
@@ -90,6 +91,7 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  supabase.rpc("calculate_visit_risk", { p_visit_id: id }).then(() => {}, () => {});
   return NextResponse.json({ success: true });
 }
 

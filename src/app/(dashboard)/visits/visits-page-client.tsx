@@ -18,6 +18,8 @@ function ElapsedTimer({ since }: { since: string }) {
 }
 
 type Assignment = { carer_id: string; carer_name: string | null; role: string };
+type RiskFactors = Record<string, { value: unknown; points: number }>;
+
 type Visit = {
   id: string;
   client_id: string;
@@ -37,6 +39,9 @@ type Visit = {
   check_in_at?: string | null;
   check_out_at?: string | null;
   break_minutes?: number | null;
+  risk_score?: number | null;
+  risk_band?: string | null;
+  risk_factors?: RiskFactors | null;
 };
 
 type Client = { id: string; name: string | null };
@@ -140,6 +145,15 @@ export function VisitsPageClient({
       dateStyle: "medium",
       timeStyle: "short",
     });
+  }
+
+  function getRiskBandClass(band: string) {
+    switch (band) {
+      case "low": return "bg-emerald-100 text-emerald-700";
+      case "medium": return "bg-amber-100 text-amber-700";
+      case "high": return "bg-red-100 text-red-700";
+      default: return "bg-slate-100 text-slate-600";
+    }
   }
 
   function getStatusBadgeClass(status: string) {
@@ -451,6 +465,13 @@ export function VisitsPageClient({
                           <div className="mt-0.5 text-xs text-slate-500">{v.notes}</div>
                         )}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {v.risk_band ? (
+                            <span className={`rounded-md px-2 py-0.5 text-[10px] font-medium ${getRiskBandClass(v.risk_band)}`}>
+                              Risk: {v.risk_band}
+                            </span>
+                          ) : (
+                            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">Calculating…</span>
+                          )}
                           <span className={`rounded-md px-2 py-0.5 text-[10px] font-medium ${getStatusBadgeClass(v.status)}`}>
                             {v.status}
                           </span>
@@ -825,6 +846,31 @@ export function VisitsPageClient({
                   placeholder="Optional notes"
                 />
               </div>
+              {editVisit.risk_factors && Object.keys(editVisit.risk_factors).length > 0 && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Risk breakdown</h3>
+                  <ul className="mt-2 space-y-1.5 text-sm">
+                    {Object.entries(editVisit.risk_factors).map(([key, f]) => {
+                      const labels: Record<string, string> = {
+                        lateness_rate_14d: "Lateness rate (14d)",
+                        travel_minutes: "Travel before visit (min)",
+                        visits_today: "Visits today",
+                        double_up: "Requires double-up",
+                        new_client: "New client",
+                        overrun_flag: "Overrun flag (14d)",
+                      };
+                      const val = f.value;
+                      const display = typeof val === "boolean" ? (val ? "Yes" : "No") : String(val);
+                      return (
+                        <li key={key} className="flex justify-between">
+                          <span className="text-slate-600">{labels[key] ?? key}: {display}</span>
+                          <span className="font-medium text-slate-900">+{f.points}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
               {error ? (
                 <div className={`rounded-xl px-4 py-3 text-sm ${isEditConflictError ? "border border-amber-200 bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"}`}>
                   {isEditConflictError ? "Carer already has a visit during this time." : error}

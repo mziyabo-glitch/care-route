@@ -76,5 +76,9 @@ export async function POST(request: Request) {
     );
   }
 
+  if (data?.id) {
+    supabase.rpc("calculate_visit_risk", { p_visit_id: data.id }).then(() => {}, () => {});
+  }
+
   return NextResponse.json(data);
 }
