@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate:copy": "node -e \"require('fs').createReadStream('supabase/migrations/20260224000000_visit_actuals_payroll.sql').pipe(process.stdout)\""
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
