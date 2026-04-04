@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { VisitCareNotesModal } from "./visit-care-notes-modal";
 
 function ElapsedTimer({ since }: { since: string }) {
   const [now, setNow] = useState(Date.now());
@@ -81,6 +82,7 @@ export function VisitsPageClient({
   const [editVisit, setEditVisit] = useState<Visit | null>(null);
   const [deleteVisit, setDeleteVisit] = useState<Visit | null>(null);
   const [adjustVisit, setAdjustVisit] = useState<Visit | null>(null);
+  const [notesVisit, setNotesVisit] = useState<Visit | null>(null);
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [adjustLoading, setAdjustLoading] = useState(false);
   const [error, setError] = useState("");
@@ -536,6 +538,14 @@ export function VisitsPageClient({
                         </select>
                         <button
                           type="button"
+                          onClick={() => { setError(""); setNotesVisit(v); }}
+                          className="text-xs font-medium text-slate-700 transition hover:text-slate-900 disabled:opacity-60"
+                          disabled={submitting}
+                        >
+                          Care notes
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => { setError(""); setEditVisit(v); setEditJoint(!!v.is_joint); }}
                           className="text-xs font-medium text-blue-600 transition hover:text-blue-500 disabled:opacity-60"
                           disabled={submitting}
@@ -909,6 +919,11 @@ export function VisitsPageClient({
       )}
 
       {/* Adjust visit modal */}
+      <VisitCareNotesModal
+        visit={notesVisit ? { id: notesVisit.id, client_name: notesVisit.client_name } : null}
+        onClose={() => setNotesVisit(null)}
+      />
+
       {adjustVisit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setAdjustVisit(null); setError(""); }}>
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>

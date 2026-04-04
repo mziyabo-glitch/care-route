@@ -80,11 +80,12 @@ Follow existing JSON routes under `src/app/api/`:
 | **1** | Migration: `care_plans`, `care_plan_sections`, RLS, indexes (this repo) |
 | **2** | RPCs or server API + read/write from dashboard |
 | **3** | UI: `/clients/[id]/care-plan` |
-| **4** | `visit_care_notes` + visit UI |
+| **4** | `visit_care_notes` + visit UI — **implemented** (migration `20260227100000_visit_care_notes.sql`, `/api/visits/[id]/care-notes`, `/api/visit-care-notes/[id]`, Visits modal) |
 | **5** | Compliance dashboard |
 
 ---
 
-## Files (schema only so far)
+## Files
 
 - Migration: `supabase/migrations/20260227000000_care_plans.sql`
+- Implemented: `src/lib/care-plan-data.ts`, `src/app/api/clients/[id]/care-plan/route.ts`, `src/app/api/clients/[id]/care-plan/sections/route.ts`, `src/app/api/care-plan-sections/[id]/route.ts`, `src/app/(dashboard)/clients/[id]/care-plan/page.tsx`, `care-plan-page-client.tsx`, Clients list link to care plan.

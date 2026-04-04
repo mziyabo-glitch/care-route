@@ -82,6 +82,23 @@ Use this to confirm RPCs/tables exist and PostgREST cache is refreshed (`NOTIFY 
 
 ---
 
+## Care plans
+
+| Route | Depends on |
+|-------|------------|
+| `api/clients/[id]/care-plan/route.ts` | Tables `clients` (membership check), `care_plans`, `care_plan_sections`; `auth.getUser()` for `created_by` on insert |
+| `api/clients/[id]/care-plan/sections/route.ts` | Tables `care_plans`, `care_plan_sections` (insert); plan must belong to client + agency |
+| `api/care-plan-sections/[id]/route.ts` | Tables `care_plan_sections`, `care_plans` (verify agency + plan) |
+
+## Visit care notes
+
+| Route | Depends on |
+|-------|------------|
+| `api/visits/[id]/care-notes/route.ts` | Tables `visits` (membership check), `visit_care_notes`; `auth.getUser()` for `author_id` on insert |
+| `api/visit-care-notes/[id]/route.ts` | Table `visit_care_notes` (update/delete by id + agency) |
+
+---
+
 ## Other
 
 | Route | Depends on |

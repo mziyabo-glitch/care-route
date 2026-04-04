@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreateClientModal } from "./create-client-modal";
@@ -155,6 +156,12 @@ export function ClientsList({ clients }: { clients: Client[] }) {
                   {c.notes && <div className="mt-1 text-sm text-slate-600">{c.notes}</div>}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  <Link
+                    href={`/clients/${c.id}/care-plan`}
+                    className="text-sm font-medium text-slate-700 transition hover:text-slate-900"
+                  >
+                    Care plan
+                  </Link>
                   <button type="button" onClick={() => { setError(""); setEditClient(c); }} className="text-sm font-medium text-blue-600 transition hover:text-blue-500">
                     Edit
                   </button>
