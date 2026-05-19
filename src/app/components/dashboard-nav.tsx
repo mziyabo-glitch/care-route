@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function DashboardNav({ canAccessBilling = false, canAccessPayroll = false }: { canAccessBilling?: boolean; canAccessPayroll?: boolean }) {
+export function DashboardNav({
+  canAccessBilling = false,
+  canAccessPayroll = false,
+  canAccessVisitMap = false,
+}: {
+  canAccessBilling?: boolean;
+  canAccessPayroll?: boolean;
+  canAccessVisitMap?: boolean;
+}) {
   const pathname = usePathname();
   const link = "rounded-lg px-4 py-2 text-sm font-medium transition-colors";
   const activeLink = "bg-slate-100 text-slate-900";
@@ -55,6 +63,14 @@ export function DashboardNav({ canAccessBilling = false, canAccessPayroll = fals
           className={`${link} ${pathname.startsWith("/payroll") ? activeLink : inactiveLink}`}
         >
           Payroll
+        </Link>
+      )}
+      {canAccessVisitMap && (
+        <Link
+          href="/visit-map"
+          className={`${link} ${pathname.startsWith("/visit-map") ? activeLink : inactiveLink}`}
+        >
+          Visit map
         </Link>
       )}
       <Link
