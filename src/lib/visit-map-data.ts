@@ -37,6 +37,7 @@ type WeekVisit = {
   id: string;
   client_id: string;
   client_name?: string | null;
+  client_address?: string | null;
   client_postcode?: string | null;
   client_lat?: number | null;
   client_lng?: number | null;
@@ -50,11 +51,9 @@ type WeekVisit = {
 
 function formatClientAddress(
   address: string | null | undefined,
-  postcode: string | null | undefined,
-  fallbackPostcode?: string | null
+  postcode: string | null | undefined
 ): string {
-  const pc = postcode ?? fallbackPostcode;
-  const parts = [address?.trim(), pc?.trim()].filter(Boolean);
+  const parts = [address?.trim(), postcode?.trim()].filter(Boolean);
   return parts.join(", ");
 }
 
@@ -117,17 +116,117 @@ function isMissingCareNote(
   return false;
 }
 
+function asNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeWeekVisit(raw: unknown): WeekVisit | null {
+  if (!raw || typeof raw !== "object") return null;
+  const v = raw as Record<string, unknown>;
+  if (typeof v.id !== "string" || typeof v.client_id !== "string") return null;
+  if (typeof v.start_time !== "string" || typeof v.end_time !== "string") {
+    return null;
+  }
+  return {
+    id: v.id,
+    client_id: v.client_id,
+    client_name:
+      typeof v.client_name === "string" ? v.client_name : undefined,
+    client_address:
+      typeof v.client_address === "string" ? v.client_address : undefined,
+    client_postcode:
+      typeof v.client_postcode === "string" ? v.client_postcode : undefined,
+    client_lat: asNumber(v.client_lat),
+    client_lng: asNumber(v.client_lng),
+    carer_id: typeof v.carer_id === "string" ? v.carer_id : undefined,
+    carer_ids: Array.isArray(v.carer_ids)
+      ? v.carer_ids.filter((id): id is string => typeof id === "string")
+      : undefined,
+    status: typeof v.status === "string" ? v.status : undefined,
+    start_time: v.start_time,
+    end_time: v.end_time,
+    assignments: v.assignments,
+  };
+}
+
+function mapVisitRow(
+  v: WeekVisit,
+  actual: {
+    check_in_at: string | null;
+    check_out_at: string | null;
+    check_in_latitude: number | null;
+    check_in_longitude: number | null;
+    check_out_latitude: number | null;
+    check_out_longitude: number | null;
+  } | undefined,
+  hasNote: boolean,
+  now: Date
+): VisitMapRow {
+  const checkIn = actual?.check_in_at ?? null;
+  const checkOut = actual?.check_out_at ?? null;
+  const status = v.status ?? "scheduled";
+  const clientLat = v.client_lat ?? null;
+  const clientLng = v.client_lng ?? null;
+
+  return {
+    id: v.id,
+    client_id: v.client_id,
+    client_name: v.client_name ?? "Unknown client",
+    address: formatClientAddress(v.client_address, v.client_postcode),
+    client_lat: clientLat,
+    client_lng: clientLng,
+    status,
+    display_status: resolveDisplayStatus(status, v.start_time, checkIn, now),
+    start_time: v.start_time,
+    end_time: v.end_time,
+    carer_names: carerNamesFromAssignments(v.assignments),
+    carer_ids: carerIdsFromVisit(v),
+    check_in_at: checkIn,
+    check_out_at: checkOut,
+    check_in_latitude: actual?.check_in_latitude ?? null,
+    check_in_longitude: actual?.check_in_longitude ?? null,
+    check_out_latitude: actual?.check_out_latitude ?? null,
+    check_out_longitude: actual?.check_out_longitude ?? null,
+    missing_care_note: isMissingCareNote(status, checkOut, hasNote),
+    distance_warning: isDistanceWarning(
+      clientLat,
+      clientLng,
+      actual?.check_in_latitude,
+      actual?.check_in_longitude
+    ),
+  };
+}
+
+export type VisitMapQueryDebug = {
+  date: string;
+  agencyId: string;
+  carerId: string | null;
+  visitCount: number;
+  geocodedCount: number;
+  firstError: string | null;
+};
+
 /**
  * Agency-scoped visits for a calendar date (UTC day window). Caller must pass
  * an authenticated Supabase client; RPC enforces agency membership.
+ *
+ * Avoids direct reads on `clients` — production RLS on that table recurses
+ * (clients ↔ visits) and raises "stack depth limit exceeded".
  */
 export async function getVisitMapRows(
   supabase: SupabaseClient,
   agencyId: string,
   date: string,
-  carerId?: string | null
+  carerId?: string | null,
+  debug?: VisitMapQueryDebug
 ): Promise<VisitMapRow[]> {
   const { start, end } = dayRangeUtc(date);
+  let firstError: string | null = null;
+  const noteError = (label: string, message: string) => {
+    if (!firstError) firstError = `${label}: ${message}`;
+  };
 
   const { data: visitsRaw, error: visitsError } = await supabase.rpc(
     "list_visits_for_week",
@@ -139,37 +238,22 @@ export async function getVisitMapRows(
   );
 
   if (visitsError) {
+    noteError("list_visits_for_week", visitsError.message);
     throw new Error(visitsError.message);
   }
 
-  let visitList: WeekVisit[] = Array.isArray(visitsRaw) ? visitsRaw : [];
+  const rawList = Array.isArray(visitsRaw) ? visitsRaw : [];
+  let visitList: WeekVisit[] = [];
+  for (const raw of rawList) {
+    const normalized = normalizeWeekVisit(raw);
+    if (normalized) visitList.push(normalized);
+  }
+
   if (carerId) {
     visitList = visitList.filter((v) => visitMatchesCarer(v, carerId));
   }
 
   const visitIds = visitList.map((v) => v.id);
-  const clientIds = [...new Set(visitList.map((v) => v.client_id))];
-
-  const addressByClient: Record<string, { address: string; postcode: string | null }> =
-    {};
-  if (clientIds.length > 0) {
-    const { data: clients, error: clientsError } = await supabase
-      .from("clients")
-      .select("id, address, postcode")
-      .eq("agency_id", agencyId)
-      .in("id", clientIds);
-
-    if (clientsError) {
-      throw new Error(clientsError.message);
-    }
-
-    for (const c of clients ?? []) {
-      addressByClient[c.id] = {
-        address: c.address ?? "",
-        postcode: c.postcode,
-      };
-    }
-  }
 
   type ActualRow = {
     visit_id: string;
@@ -201,65 +285,48 @@ export async function getVisitMapRows(
     ]);
 
     if (actualsRes.error) {
+      noteError("visit_actuals", actualsRes.error.message);
       throw new Error(actualsRes.error.message);
     }
     if (notesRes.error) {
+      noteError("visit_care_notes", notesRes.error.message);
       throw new Error(notesRes.error.message);
     }
 
     for (const row of actualsRes.data ?? []) {
-      actualsByVisit[row.visit_id] = row;
+      if (typeof row.visit_id === "string") {
+        actualsByVisit[row.visit_id] = row;
+      }
     }
     for (const row of notesRes.data ?? []) {
-      visitsWithNotes.add(row.visit_id);
+      if (typeof row.visit_id === "string") {
+        visitsWithNotes.add(row.visit_id);
+      }
     }
   }
 
   const now = new Date();
-  return visitList.map((v) => {
-    const actual = actualsByVisit[v.id];
-    const checkIn = actual?.check_in_at ?? null;
-    const checkOut = actual?.check_out_at ?? null;
-    const status = v.status ?? "scheduled";
-    const clientLat = v.client_lat ?? null;
-    const clientLng = v.client_lng ?? null;
-    const addr = addressByClient[v.client_id];
-    const address = formatClientAddress(
-      addr?.address,
-      addr?.postcode,
-      v.client_postcode
-    );
+  const rows: VisitMapRow[] = [];
+  for (const v of visitList) {
+    try {
+      rows.push(
+        mapVisitRow(v, actualsByVisit[v.id], visitsWithNotes.has(v.id), now)
+      );
+    } catch {
+      // Skip malformed visit rows rather than failing the whole page.
+    }
+  }
 
-    return {
-      id: v.id,
-      client_id: v.client_id,
-      client_name: v.client_name ?? "Unknown client",
-      address,
-      client_lat: clientLat,
-      client_lng: clientLng,
-      status,
-      display_status: resolveDisplayStatus(status, v.start_time, checkIn, now),
-      start_time: v.start_time,
-      end_time: v.end_time,
-      carer_names: carerNamesFromAssignments(v.assignments),
-      carer_ids: carerIdsFromVisit(v),
-      check_in_at: checkIn,
-      check_out_at: checkOut,
-      check_in_latitude: actual?.check_in_latitude ?? null,
-      check_in_longitude: actual?.check_in_longitude ?? null,
-      check_out_latitude: actual?.check_out_latitude ?? null,
-      check_out_longitude: actual?.check_out_longitude ?? null,
-      missing_care_note: isMissingCareNote(
-        status,
-        checkOut,
-        visitsWithNotes.has(v.id)
-      ),
-      distance_warning: isDistanceWarning(
-        clientLat,
-        clientLng,
-        actual?.check_in_latitude,
-        actual?.check_in_longitude
-      ),
-    };
-  });
+  if (debug) {
+    debug.date = date;
+    debug.agencyId = agencyId;
+    debug.carerId = carerId ?? null;
+    debug.visitCount = rows.length;
+    debug.geocodedCount = rows.filter(
+      (r) => r.client_lat != null && r.client_lng != null
+    ).length;
+    debug.firstError = firstError;
+  }
+
+  return rows;
 }
