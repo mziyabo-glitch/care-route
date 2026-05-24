@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type VisitRef = {
   id: string;
+  client_id: string;
   client_name: string | null;
 };
 
@@ -13,6 +15,8 @@ type CareNote = {
   note_type: string | null;
   created_at: string;
   updated_at: string;
+  author_label?: string;
+  author_email?: string | null;
 };
 
 const NOTE_TYPES = [
@@ -20,6 +24,16 @@ const NOTE_TYPES = [
   { value: "general", label: "general" },
   { value: "handover", label: "handover" },
   { value: "clinical", label: "clinical" },
+];
+
+type NoteFilter = "all" | "general" | "handover" | "clinical" | "untagged";
+
+const FILTER_OPTIONS: { value: NoteFilter; label: string }[] = [
+  { value: "all", label: "All notes" },
+  { value: "general", label: "General" },
+  { value: "handover", label: "Handover" },
+  { value: "clinical", label: "Clinical" },
+  { value: "untagged", label: "Untagged" },
 ];
 
 function formatTs(iso: string) {
@@ -33,6 +47,12 @@ function formatTs(iso: string) {
   }
 }
 
+function matchesFilter(note: CareNote, filter: NoteFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "untagged") return !note.note_type;
+  return note.note_type === filter;
+}
+
 export function VisitCareNotesModal({
   visit,
   onClose,
@@ -43,6 +63,7 @@ export function VisitCareNotesModal({
   const [notes, setNotes] = useState<CareNote[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [noteFilter, setNoteFilter] = useState<NoteFilter>("all");
   const [newBody, setNewBody] = useState("");
   const [newType, setNewType] = useState("");
   const [adding, setAdding] = useState(false);
@@ -50,6 +71,11 @@ export function VisitCareNotesModal({
   const [editBody, setEditBody] = useState("");
   const [editType, setEditType] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  const filteredNotes = useMemo(
+    () => notes.filter((n) => matchesFilter(n, noteFilter)),
+    [notes, noteFilter]
+  );
 
   const load = useCallback(async () => {
     if (!visit) return;
@@ -79,6 +105,7 @@ export function VisitCareNotesModal({
       setEditingId(null);
       setNewBody("");
       setNewType("");
+      setNoteFilter("all");
       return;
     }
     void load();
@@ -168,6 +195,8 @@ export function VisitCareNotesModal({
 
   if (!visit) return null;
 
+  const carePlanHref = `/clients/${visit.client_id}/care-plan`;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -178,8 +207,18 @@ export function VisitCareNotesModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-slate-100 px-5 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">Visit care notes</h2>
-          <p className="mt-0.5 text-sm text-slate-600">{visit.client_name ?? "Client"}</p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Visit care notes</h2>
+              <p className="mt-0.5 text-sm text-slate-600">{visit.client_name ?? "Client"}</p>
+            </div>
+            <Link
+              href={carePlanHref}
+              className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-800 hover:bg-indigo-100"
+            >
+              View care plan
+            </Link>
+          </div>
         </div>
         <div className="space-y-4 px-5 py-4">
           {error ? (
@@ -187,13 +226,31 @@ export function VisitCareNotesModal({
               {error}
             </div>
           ) : null}
+          <label className="block text-xs font-medium text-slate-600">
+            Show
+            <select
+              value={noteFilter}
+              onChange={(e) => setNoteFilter(e.target.value as NoteFilter)}
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900"
+            >
+              {FILTER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
           {loading ? (
             <p className="text-sm text-slate-500">Loading notes…</p>
-          ) : notes.length === 0 ? (
-            <p className="text-sm text-slate-500">No care notes yet for this visit.</p>
+          ) : filteredNotes.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              {notes.length === 0
+                ? "No care notes yet for this visit."
+                : "No notes match this filter."}
+            </p>
           ) : (
             <ul className="space-y-3">
-              {notes.map((n) => (
+              {filteredNotes.map((n) => (
                 <li
                   key={n.id}
                   className="rounded-lg border border-slate-100 bg-slate-50/80 p-3"
@@ -240,12 +297,18 @@ export function VisitCareNotesModal({
                     <>
                       <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                         <span>{formatTs(n.created_at)}</span>
+                        <span className="text-slate-300">·</span>
+                        <span title={n.author_email ?? undefined}>
+                          {n.author_label ?? "Staff"}
+                        </span>
                         {n.note_type ? (
                           <span className="rounded bg-indigo-100 px-1.5 py-0.5 font-medium text-indigo-800">
                             {n.note_type}
                           </span>
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">
+                            untagged
+                          </span>
                         )}
                       </div>
                       <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{n.body}</p>

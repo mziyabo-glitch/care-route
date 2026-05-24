@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentAgencyId } from "@/lib/agency";
 import {
+  enrichVisitCareNotesWithAuthors,
   verifyVisitBelongsToAgency,
   type VisitCareNoteRow,
 } from "@/lib/visit-care-notes-data";
@@ -34,9 +35,10 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({
-    notes: (data ?? []) as VisitCareNoteRow[],
-  });
+  const rows = (data ?? []) as VisitCareNoteRow[];
+  const notes = await enrichVisitCareNotesWithAuthors(supabase, agencyId, rows);
+
+  return NextResponse.json({ notes });
 }
 
 export async function POST(

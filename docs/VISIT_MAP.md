@@ -4,21 +4,23 @@
 
 Manager-only **static daily map** of scheduled visits at **client geocoded addresses** (from `clients.latitude` / `clients.longitude`). One pin per visit for the selected calendar date.
 
-- **In scope:** date filter (default today, UK display), status-coloured pins, side panel / popup with client, carer(s), schedule, check-in/out from `visit_actuals`, link to `/visits`.
-- **Out of scope:** live carer GPS, compliance dashboard, new location tables, mobile background tracking.
+- **In scope:** date filter (default today, UK display), optional carer filter, status-coloured pins, side panel / popup with client, address, carer(s), schedule, check-in/out from `visit_actuals`, missing-care-note and distance warnings, link to `/visits`, fallback table when the map fails or visits lack coordinates.
+- **Out of scope:** live carer GPS, compliance dashboard, continuous background tracking.
 
 ## Access control
 
-- Nav link and `/visit-map` page: `owner`, `admin`, `manager` (same as billing).
-- `GET /api/visit-map?date=YYYY-MM-DD` returns **403** for other roles.
+- Nav link and `/visit-map` page: `owner`, `admin`, `manager` (`canAccessVisitMap` in `src/lib/permissions.ts`).
+- `GET /api/visit-map?date=YYYY-MM-DD&carer_id=<uuid>` returns **403** for other roles.
 
 ## Data sources
 
 | Data | Source |
 |------|--------|
 | Visits, client lat/lng, carers | RPC `list_visits_for_week` for UTC day window |
-| Check-in / check-out | `visit_actuals.check_in_at`, `check_out_at` (merged in API) |
-| Client coordinates | `clients.latitude`, `clients.longitude` (geocode via Clients UI / `update_client_geocode`) |
+| Client address | `clients.address` / `postcode` (merged in `getVisitMapRows`) |
+| Check-in / check-out | `visit_actuals` (times + optional GPS columns) |
+| Care notes flag | `visit_care_notes` (no row ⇒ `missing_care_note` when visit completed/checked out) |
+| Client coordinates | `clients.latitude`, `clients.longitude`; `geocoded_at` when set via geocode RPC |
 
 ### Date window
 
@@ -28,46 +30,46 @@ The API uses **UTC midnight–midnight** for the `date` query param (`YYYY-MM-DD
 
 | Display status | Rule | Colour |
 |----------------|------|--------|
-| `scheduled` | `visits.status = scheduled`, start not yet passed (or passed with check-in) | Blue |
+| `scheduled` | `visits.status = scheduled`, not due soon / late | Blue |
+| `due_soon` | `scheduled`, start within 30 minutes, no check-in | Cyan |
 | `late` | `scheduled`, `start_time` ≤ now, **no** `check_in_at` | Amber |
 | `in_progress` | `visits.status = in_progress` | Purple |
 | `completed` | `visits.status = completed` | Green |
 | `missed` | `visits.status = missed` | Red |
 
-**Late rule (code):** `resolveDisplayStatus()` in `src/lib/visit-map.ts` — only applies while status remains `scheduled`; once checked in or status changes, late no longer applies.
+**Late / due soon:** `resolveDisplayStatus()` in `src/lib/visit-map.ts`.
 
-Visits without client coordinates are listed in the API response but **not** plotted; geocode on the Clients page.
+**Distance warning:** check-in GPS more than **500 m** from client lat/lng (haversine), when `visit_actuals.check_in_latitude` / `check_in_longitude` are present.
 
-## Schema gaps (explicit)
+Visits without client coordinates appear in the API and in the **fallback table**; they are not plotted until geocoded on the Clients page.
 
-### `visit_actuals` — no GPS columns
+## Schema (migrations)
 
-Migration `20260224000000_visit_actuals_payroll.sql` defines:
-
-- `check_in_at`, `check_out_at`, sources, `break_minutes`
-- **No** `check_in_latitude`, `check_in_longitude`, or similar
-
-**Impact:** Check-in/out **times** appear in the panel; **secondary GPS markers** at actual check-in locations are **not** implemented. Adding them requires a product decision, mobile capture, and a new migration — not invented in this MVP.
-
-### `clients.geocoded_at`
-
-Not present in migrations. Coordinates are set by geocode RPC without a timestamp column. **No migration added** — not required for MVP.
+| Column / table | Migration |
+|----------------|-----------|
+| `clients.latitude`, `longitude` | `20260218250000_travel_geolocation.sql` |
+| `clients.geocoded_at` | `20260228100000_client_geocoded_at.sql` |
+| `visit_actuals` GPS | `20260228100100_visit_actuals_gps.sql` |
+| `visit_care_notes` | `20260227100000_visit_care_notes.sql` |
 
 ## Live tracking (deferred)
 
-Real-time carer positions need:
+Real-time carer positions need explicit consent, lawful basis (UK GDPR), mobile capture, retention policy, and storage separate from this daily plan map. This MVP shows **where clients are** and **visit state**, not **where carers are now**.
 
-- Explicit consent and lawful basis (UK GDPR / workforce monitoring)
-- Mobile app background location, retention, and audit policy
-- Separate storage (not `visit_actuals` alone) and manager UX distinct from this daily plan map
+### Future enhancements
 
-This MVP intentionally shows **where clients are** and **visit state**, not **where carers are now**.
+- Mobile capture of check-in/out GPS into `visit_actuals`
+- Pin or overlay for check-in location vs client address
+- London-local day window (instead of UTC midnight)
+- Compliance dashboard (missed visits + missing notes aggregate)
+- Export / print daily map snapshot
 
 ## Routes
 
 - Page: `src/app/(dashboard)/visit-map/page.tsx`
 - API: `src/app/api/visit-map/route.ts`
-- Library: `src/lib/visit-map.ts`
+- Data: `src/lib/visit-map-data.ts`
+- Display helpers: `src/lib/visit-map.ts`
 
 ## Map stack
 

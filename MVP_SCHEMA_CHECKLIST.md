@@ -4,6 +4,77 @@ Use this to confirm RPCs/tables exist and PostgREST cache is refreshed (`NOTIFY 
 
 **API routes** are under `src/app/api/`. Dependencies are **exact names** as used in code.
 
+Master audit: [`docs/checklists/production-stabilisation-audit.md`](docs/checklists/production-stabilisation-audit.md)
+
+---
+
+## Verification status
+
+**Legend:** Repo = present in this codebase. Production = you must confirm on live Supabase/Vercel.
+
+| Area | Repo | Production |
+|------|:----:|:----------:|
+| 34 migrations in `supabase/migrations/` (through `20260228100100`) | ✅ | ✅ schema 2026-05-19 (MCP `care-route`); CLI migration history empty |
+| `NOTIFY pgrst` documented | ✅ | ✅ run 2026-05-19 after `geocoded_at` |
+| Core RPCs (clients, carers, visits, rota, payroll, billing) | ✅ | ✅ spot-check 2026-05-19 |
+| Risk engine (`20260226000000`) | ✅ | ✅ `visit_risk_scores` + RPCs present |
+| Care plans (`care_plans`, `care_plan_sections`) | ✅ | ✅ tables + RLS 2026-05-19 |
+| Visit care notes (`visit_care_notes`) | ✅ | ✅ table + RLS 2026-05-19 |
+| Visit map (`clients.geocoded_at`, GPS on `visit_actuals`) | ✅ | ✅ all columns 2026-05-19 (`geocoded_at` applied) |
+| Vercel env + Supabase auth URLs | ✅ doc | [ ] confirm in dashboards |
+| Compliance (`GET /api/compliance`) | ✅ | [ ] deploy + smoke (app-level) |
+
+Apply order: [`supabase/scripts/RUN_MIGRATIONS.md`](supabase/scripts/RUN_MIGRATIONS.md) · Smoke test: [`docs/PRODUCTION_SMOKE_TEST.md`](docs/PRODUCTION_SMOKE_TEST.md)
+
+---
+
+## Production verification (operator — check on live Supabase)
+
+### Auth / tenancy
+
+- [ ] `get_client_postcode`, `update_client_geocode`, `agency_members` RLS
+- [ ] `list_agency_members`, `list_invites`, `get_my_role`, `create_invite`, `accept_invite`
+
+### Clients / carers / visits
+
+- [ ] `update_client`, `archive_client`, `list_carers`, `insert_carer`, `archive_carer`
+- [ ] `insert_visit`, `update_visit`, `update_visit_status`, `delete_visit`, `calculate_visit_risk`
+- [ ] `insert_client`, `list_clients` (server actions / pages)
+
+### Rota
+
+- [ ] `list_carers_for_selection`, `list_visits_for_week`, `lookup_travel_cache`, `upsert_travel_cache`, `swap_visit_times`
+- [ ] `recalculate_visit_risk_for_range`
+
+### Check-in / payroll
+
+- [ ] `check_in`, `check_out`, `admin_adjust_visit_time`, `get_visit_adjustments`
+- [ ] `list_timesheets`, `generate_timesheet`, `get_timesheet_detail`, `approve_timesheet`
+- [ ] Tables: `visit_actuals`, `visit_adjustments`, `timesheets`, `timesheet_lines`
+
+### Billing
+
+- [ ] `list_billing_for_range`, `list_billing_summary`, billing setup RPCs
+- [ ] Tables/views: `funders`, `client_funders`, `funder_rates`, `billing_rates`
+
+### Risk / cron
+
+- [ ] `get_visit_risk`, `calculate_visit_risk`, table `visit_risk_scores`
+- [ ] Cron env: `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`
+
+### Care plans
+
+- [ ] Tables `care_plans`, `care_plan_sections` + RLS (migration `20260227000000_care_plans.sql`)
+
+### Visit care notes
+
+- [ ] Table `visit_care_notes` (migration `20260227100000_visit_care_notes.sql`)
+
+### Visit map
+
+- [ ] `clients.latitude` / `longitude` / `geocoded_at`; optional GPS on `visit_actuals`
+- [ ] `GET /api/visit-map` returns 200 for manager+
+
 ---
 
 ## Auth / tenancy
@@ -86,7 +157,7 @@ Use this to confirm RPCs/tables exist and PostgREST cache is refreshed (`NOTIFY 
 
 | Route | Depends on |
 |-------|------------|
-| `api/clients/[id]/care-plan/route.ts` | Tables `clients` (membership check), `care_plans`, `care_plan_sections`; `auth.getUser()` for `created_by` on insert |
+| `api/clients/[id]/care-plan/route.ts` | Tables `clients` (membership check), `care_plans`, `care_plan_sections`; `auth.getUser()` for `created_by` on insert; POST inserts default sections (needs, risks, medication, preferences, emergency) |
 | `api/clients/[id]/care-plan/sections/route.ts` | Tables `care_plans`, `care_plan_sections` (insert); plan must belong to client + agency |
 | `api/care-plan-sections/[id]/route.ts` | Tables `care_plan_sections`, `care_plans` (verify agency + plan) |
 
@@ -94,8 +165,28 @@ Use this to confirm RPCs/tables exist and PostgREST cache is refreshed (`NOTIFY 
 
 | Route | Depends on |
 |-------|------------|
-| `api/visits/[id]/care-notes/route.ts` | Tables `visits` (membership check), `visit_care_notes`; `auth.getUser()` for `author_id` on insert |
+| `api/visits/[id]/care-notes/route.ts` | Tables `visits` (membership check), `visit_care_notes`; `auth.getUser()` for `author_id` on insert; GET enriches notes with `author_label` / `author_email` via RPC `list_agency_members` (joins `auth.users`) |
 | `api/visit-care-notes/[id]/route.ts` | Table `visit_care_notes` (update/delete by id + agency) |
+
+---
+
+## Visit map
+
+| Route | Depends on |
+|-------|------------|
+| `api/visit-map/route.ts` | RPC `list_visits_for_week`, `list_carers_for_selection`; tables `visit_actuals` (incl. optional GPS cols), `visit_care_notes`, `clients` (address, lat/lng); `get_my_role` / manager+ via `canAccessVisitMap` |
+
+**Page:** `(dashboard)/visit-map` — same role gate in layout + nav.
+
+---
+
+## Compliance dashboard
+
+| Route | Depends on |
+|-------|------------|
+| `api/compliance/route.ts` | RPC `list_visits_for_week`; tables `visit_actuals`, `visit_care_notes`; `get_my_role` / manager+ via `canAccessCompliance` |
+
+**Page:** `(dashboard)/compliance` — layout + nav gate (owner, admin, manager). Query params `start`, `end` (YYYY-MM-DD; default last 7 days).
 
 ---
 

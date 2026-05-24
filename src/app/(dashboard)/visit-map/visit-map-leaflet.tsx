@@ -10,6 +10,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import {
+  displayStatusLabel,
   formatUkTime,
   pinColor,
   type VisitMapRow,
@@ -92,7 +93,7 @@ export function VisitMapLeaflet({
                   <p className="font-semibold">{v.client_name}</p>
                   <p className="text-slate-600">
                     {formatUkTime(v.start_time)} ·{" "}
-                    {v.display_status.replace("_", " ")}
+                    {displayStatusLabel(v.display_status)}
                   </p>
                   <button
                     type="button"

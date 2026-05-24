@@ -4,6 +4,10 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 - Production URL: https://care-route-two.vercel.app
 - Do not use Vercel preview URLs for Supabase redirect URLs. Use only the production domain above for auth redirects.
+- **Stabilisation TODO:** [`TODO.md`](TODO.md) section A
+- **Deploy checklists:** [`docs/checklists/README.md`](docs/checklists/README.md) (migrations, env vars, auth URLs, smoke tests)
+- **Production smoke test:** [`docs/PRODUCTION_SMOKE_TEST.md`](docs/PRODUCTION_SMOKE_TEST.md)
+- **Migrations:** [`supabase/scripts/RUN_MIGRATIONS.md`](supabase/scripts/RUN_MIGRATIONS.md)
 
 ## Getting Started
 

@@ -7,10 +7,12 @@ export function DashboardNav({
   canAccessBilling = false,
   canAccessPayroll = false,
   canAccessVisitMap = false,
+  canAccessCompliance = false,
 }: {
   canAccessBilling?: boolean;
   canAccessPayroll?: boolean;
   canAccessVisitMap?: boolean;
+  canAccessCompliance?: boolean;
 }) {
   const pathname = usePathname();
   const link = "rounded-lg px-4 py-2 text-sm font-medium transition-colors";
@@ -18,7 +20,7 @@ export function DashboardNav({
   const inactiveLink = "text-slate-600 hover:bg-slate-50 hover:text-slate-900";
 
   return (
-    <nav className="flex gap-1" aria-label="Main">
+    <nav className="flex min-w-0 flex-1 flex-wrap gap-1" aria-label="Main">
       <Link
         href="/dashboard"
         className={`${link} ${pathname === "/dashboard" ? activeLink : inactiveLink}`}
@@ -71,6 +73,14 @@ export function DashboardNav({
           className={`${link} ${pathname.startsWith("/visit-map") ? activeLink : inactiveLink}`}
         >
           Visit map
+        </Link>
+      )}
+      {canAccessCompliance && (
+        <Link
+          href="/compliance"
+          className={`${link} ${pathname.startsWith("/compliance") ? activeLink : inactiveLink}`}
+        >
+          Compliance
         </Link>
       )}
       <Link

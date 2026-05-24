@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentAgencyId } from "@/lib/agency";
 import {
+  DEFAULT_CARE_PLAN_SECTION_TEMPLATES,
   getCarePlanByIdForClient,
   loadCarePlanBundle,
   verifyClientBelongsToAgency,
@@ -130,7 +131,29 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  return NextResponse.json({ plan: data as CarePlanRow });
+  const plan = data as CarePlanRow;
+  const sectionRows = DEFAULT_CARE_PLAN_SECTION_TEMPLATES.map((t) => ({
+    agency_id: agencyId,
+    care_plan_id: plan.id,
+    title: t.title,
+    body: "",
+    sort_order: t.sort_order,
+    section_key: t.section_key,
+    updated_at: now,
+  }));
+
+  const { error: sectionsError } = await supabase
+    .from("care_plan_sections")
+    .insert(sectionRows);
+
+  if (sectionsError) {
+    return NextResponse.json(
+      { error: `Plan created but default sections failed: ${sectionsError.message}` },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ plan });
 }
 
 export async function PATCH(

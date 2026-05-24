@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { VisitCareNotesModal } from "./visit-care-notes-modal";
 
@@ -544,6 +545,12 @@ export function VisitsPageClient({
                         >
                           Care notes
                         </button>
+                        <Link
+                          href={`/clients/${v.client_id}/care-plan`}
+                          className="text-xs font-medium text-indigo-600 transition hover:text-indigo-500"
+                        >
+                          Care plan
+                        </Link>
                         <button
                           type="button"
                           onClick={() => { setError(""); setEditVisit(v); setEditJoint(!!v.is_joint); }}
@@ -920,7 +927,15 @@ export function VisitsPageClient({
 
       {/* Adjust visit modal */}
       <VisitCareNotesModal
-        visit={notesVisit ? { id: notesVisit.id, client_name: notesVisit.client_name } : null}
+        visit={
+          notesVisit
+            ? {
+                id: notesVisit.id,
+                client_id: notesVisit.client_id,
+                client_name: notesVisit.client_name,
+              }
+            : null
+        }
         onClose={() => setNotesVisit(null)}
       />
 

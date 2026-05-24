@@ -30,6 +30,7 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [effectiveTo, setEffectiveTo] = useState("");
   const [savingPlan, setSavingPlan] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   const [newTitle, setNewTitle] = useState("");
   const [newBody, setNewBody] = useState("");
@@ -90,6 +91,36 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
       await load();
     } finally {
       setSavingPlan(false);
+    }
+  }
+
+  async function handleArchivePlan() {
+    if (!plan) return;
+    const ok = confirm(
+      "Archive this care plan?\n\nThe plan will be kept for records but hidden from editing. You can create a new care plan for this client after archiving (only one non-archived plan is allowed)."
+    );
+    if (!ok) return;
+    setError("");
+    setArchiving(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/care-plan`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan_id: plan.id,
+          status: "archived",
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(typeof data?.error === "string" ? data.error : "Could not archive plan");
+        return;
+      }
+      setPlan(null);
+      setSections([]);
+      await load();
+    } finally {
+      setArchiving(false);
     }
   }
 
@@ -224,7 +255,6 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
                 >
                   <option value="draft">draft</option>
                   <option value="active">active</option>
-                  <option value="archived">archived</option>
                 </select>
               </label>
               <label className="block text-sm">
@@ -259,13 +289,26 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
             <p className="mt-2 text-xs text-slate-500">
               Last updated: {new Date(plan.updated_at).toLocaleString()}
             </p>
-            <button
-              type="submit"
-              disabled={savingPlan}
-              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
-            >
-              {savingPlan ? "Saving…" : "Save plan"}
-            </button>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                disabled={savingPlan || archiving}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+              >
+                {savingPlan ? "Saving…" : "Save plan"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleArchivePlan()}
+                disabled={savingPlan || archiving}
+                className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+              >
+                {archiving ? "Archiving…" : "Archive plan"}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              Archiving hides this plan and lets you start a new one. Archived plans are kept for records.
+            </p>
           </form>
 
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

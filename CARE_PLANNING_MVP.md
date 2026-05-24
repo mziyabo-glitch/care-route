@@ -2,6 +2,26 @@
 
 Aligned with existing patterns: **Supabase migrations**, **agency-scoped data**, **RLS** via `agency_members`, **Next.js** `(dashboard)` routes and `api/*` RPC style (to be added in later slices).
 
+Checklists: [`docs/checklists/README.md`](docs/checklists/README.md) · Schema map: [`MVP_SCHEMA_CHECKLIST.md`](MVP_SCHEMA_CHECKLIST.md)
+
+---
+
+## Phase status (production stabilisation)
+
+| Phase | Scope | Code (repo) | Production |
+|-------|--------|:-----------:|:----------:|
+| 1 | `care_plans`, `care_plan_sections`, RLS | ✅ | [ ] |
+| 2 | API + dashboard read/write | ✅ | [ ] |
+| 3 | UI `/clients/[id]/care-plan` | ✅ | [ ] |
+| 4 | `visit_care_notes` + visit UI | ✅ | [ ] |
+| — | **Visit map** (manager+ daily map, `20260228100000`–`00100`) | ✅ | [ ] |
+| 5 | Compliance dashboard | ✅ | [ ] |
+
+- [x] Phases 1–5 + visit map implemented in repo
+- [ ] Phases 1–5 + visit map verified on production (migrations + [`docs/PRODUCTION_SMOKE_TEST.md`](docs/PRODUCTION_SMOKE_TEST.md))
+
+**Stabilisation tracker:** [`TODO.md`](TODO.md) section A · Audit: [`docs/checklists/production-stabilisation-audit.md`](docs/checklists/production-stabilisation-audit.md)
+
 ---
 
 ## Proposed schema
@@ -47,7 +67,7 @@ Aligned with existing patterns: **Supabase migrations**, **agency-scoped data**,
 |------|---------|
 | `(dashboard)/clients/[id]/care-plan` | View/edit active care plan and sections for one client |
 
-Optional later: `(dashboard)/compliance` for missed visits + missing notes.
+`(dashboard)/compliance` — missed visits + missing care notes (manager+).
 
 ---
 
@@ -81,7 +101,7 @@ Follow existing JSON routes under `src/app/api/`:
 | **2** | RPCs or server API + read/write from dashboard |
 | **3** | UI: `/clients/[id]/care-plan` |
 | **4** | `visit_care_notes` + visit UI — **implemented** (migration `20260227100000_visit_care_notes.sql`, `/api/visits/[id]/care-notes`, `/api/visit-care-notes/[id]`, Visits modal) |
-| **5** | Compliance dashboard |
+| **5** | Compliance dashboard — **implemented** (`/compliance`, `GET /api/compliance`, `src/lib/compliance-data.ts`) |
 
 ---
 
@@ -89,3 +109,39 @@ Follow existing JSON routes under `src/app/api/`:
 
 - Migration: `supabase/migrations/20260227000000_care_plans.sql`
 - Implemented: `src/lib/care-plan-data.ts`, `src/app/api/clients/[id]/care-plan/route.ts`, `src/app/api/clients/[id]/care-plan/sections/route.ts`, `src/app/api/care-plan-sections/[id]/route.ts`, `src/app/(dashboard)/clients/[id]/care-plan/page.tsx`, `care-plan-page-client.tsx`, Clients list link to care plan.
+
+---
+
+## Visit map (MVP)
+
+Manager+ **static daily map** at client geocoded addresses — not live carer tracking.
+
+| Piece | Location |
+|-------|----------|
+| Page | `(dashboard)/visit-map` |
+| API | `GET /api/visit-map?date=&carer_id=` |
+| Data | `src/lib/visit-map-data.ts` |
+| Docs | `docs/VISIT_MAP.md` |
+
+**Features:** date + carer filter, status pins (scheduled / due soon / late / in progress / completed / missed), check-in/out from `visit_actuals`, missing care note warning, check-in distance warning (when GPS columns populated), fallback table if map unavailable or no coordinates.
+
+**Migrations (apply on production):** `20260228100000_client_geocoded_at.sql`, `20260228100100_visit_actuals_gps.sql` (after care plans / visit notes).
+
+**Stabilisation:** code ✅ in repo; production ⏳ requires migrations + smoke test (visit map section in [`docs/PRODUCTION_SMOKE_TEST.md`](docs/PRODUCTION_SMOKE_TEST.md)).
+
+**Deferred:** live GPS carer tracking — see `docs/VISIT_MAP.md`. Compliance: [`docs/COMPLIANCE.md`](docs/COMPLIANCE.md).
+
+---
+
+## Section C — Care planning polish (repo)
+
+| Item | Status |
+|------|--------|
+| Link to client care plan from visit care notes modal (+ visit row) | ✅ |
+| Default section templates on plan creation (API POST) | ✅ |
+| Archive plan UI with confirm; create-new after archive | ✅ |
+| Visit notes modal: type filter + author display (agency member email) | ✅ |
+
+**Default sections** (created on `POST /api/clients/[id]/care-plan`): Needs, Risks, Medication, Preferences, Emergency / escalation notes (`section_key`: needs, risks, medication, preferences, emergency; `sort_order` 0–4).
+
+**Author on visit notes:** `GET /api/visits/[id]/care-notes` enriches notes with `author_label` / `author_email` via `list_agency_members` RPC (no `profiles` table).

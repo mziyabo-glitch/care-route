@@ -25,6 +25,19 @@ export type CarePlanSectionRow = {
   updated_at: string;
 };
 
+/** Default sections created when a new care plan is inserted (POST). */
+export const DEFAULT_CARE_PLAN_SECTION_TEMPLATES: ReadonlyArray<{
+  section_key: string;
+  title: string;
+  sort_order: number;
+}> = [
+  { section_key: "needs", title: "Needs", sort_order: 0 },
+  { section_key: "risks", title: "Risks", sort_order: 1 },
+  { section_key: "medication", title: "Medication", sort_order: 2 },
+  { section_key: "preferences", title: "Preferences", sort_order: 3 },
+  { section_key: "emergency", title: "Emergency / escalation notes", sort_order: 4 },
+];
+
 /**
  * Server-only: confirms the client row exists under the resolved agency (never trust client agency_id).
  */
@@ -46,12 +59,11 @@ export async function verifyClientBelongsToAgency(
  * Pick a single plan to show: active (at most one), else most recently updated non-archived, else most recent overall.
  */
 export function pickDisplayCarePlan(plans: CarePlanRow[]): CarePlanRow | null {
-  if (!plans.length) return null;
-  const active = plans.find((p) => p.status === "active");
-  if (active) return active;
   const pool = plans.filter((p) => p.status !== "archived");
-  const list = pool.length ? pool : plans;
-  return [...list].sort(
+  if (!pool.length) return null;
+  const active = pool.find((p) => p.status === "active");
+  if (active) return active;
+  return [...pool].sort(
     (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
   )[0] ?? null;
 }

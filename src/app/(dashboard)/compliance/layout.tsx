@@ -1,14 +1,14 @@
 import { redirect } from "next/navigation";
-import { canAccessVisitMap, getCurrentRole } from "@/lib/permissions";
+import { canAccessCompliance, getCurrentRole } from "@/lib/permissions";
 
-export default async function VisitMapLayout({
+export default async function ComplianceLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const { role } = await getCurrentRole();
 
-  if (!canAccessVisitMap(role)) {
+  if (!canAccessCompliance(role)) {
     redirect("/dashboard");
   }
 
