@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentAgencyId } from "@/lib/agency";
 import {
   canAccessCompliance,
   canAccessVisitMap,
@@ -22,14 +23,8 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  const { data: membership } = await supabase
-    .from("agency_members")
-    .select("agency_id")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (!membership) {
+  const agencyId = await getCurrentAgencyId();
+  if (!agencyId) {
     redirect("/onboarding");
   }
 
