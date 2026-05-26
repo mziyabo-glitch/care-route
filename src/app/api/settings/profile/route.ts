@@ -4,6 +4,7 @@ import {
   displayNameToMetadata,
   getDisplayNameFromMetadata,
 } from "@/lib/user-display-name";
+import { mapSettingsSaveError } from "@/lib/settings-errors";
 
 export async function PATCH(request: Request) {
   const supabase = await createClient();
@@ -37,7 +38,10 @@ export async function PATCH(request: Request) {
   });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json(
+      { error: mapSettingsSaveError(error.message) },
+      { status: 400 }
+    );
   }
 
   const meta = (data.user?.user_metadata ?? {}) as Record<string, unknown>;

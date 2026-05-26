@@ -11,9 +11,9 @@ How display names and agency names are stored and who can change them.
 | **Who can edit** | **Owner**, **admin**, or **manager** for the **current** agency only |
 | **How** | Settings → General → Agency → Save agency name |
 | **API** | `PATCH /api/settings/agency` — uses `getCurrentAgencyId()`; never trusts client `agency_id` |
-| **Database** | `update_agency_name` RPC (migration `20260526180000`) checks `get_my_role` |
+| **Database** | `update_agency_name` / `get_agency_name_for_member` RPCs (migrations `20260526180000`, `20260526190000`) — SECURITY DEFINER, inline `agency_members` check |
 
-Viewers cannot rename the agency. Owners on legacy databases without the RPC may still update via RLS `Update own agencies` (owner only).
+Viewers cannot rename the agency.
 
 ## User display name
 
@@ -46,7 +46,7 @@ Unchanged: **`getCurrentAgencyId()`** / **`getCurrentAgency()`** use the newest 
 
 ## Apply migration (production)
 
-After deploy, run migration **`20260526180000_update_agency_name_rpc.sql`** on Supabase so admin/manager can rename agencies. Then `NOTIFY pgrst, 'reload schema';`.
+After deploy, run migrations **`20260526180000_update_agency_name_rpc.sql`** and **`20260526190000_fix_update_agency_name_rls.sql`** on Supabase. Then `NOTIFY pgrst, 'reload schema';`.
 
 ## Testing
 

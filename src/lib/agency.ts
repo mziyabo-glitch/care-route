@@ -38,18 +38,19 @@ export async function getCurrentAgency(): Promise<{
   return { id: agencyId, name };
 }
 
+/** Agency display name via SECURITY DEFINER RPC (avoids agencies RLS recursion). */
 export async function fetchAgencyName(
   supabase: SupabaseClient,
   agencyId: string
 ): Promise<string> {
-  const { data, error } = await supabase
-    .from("agencies")
-    .select("name")
-    .eq("id", agencyId)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("get_agency_name_for_member", {
+    p_agency_id: agencyId,
+  });
 
-  if (error || !data?.name?.trim()) {
+  if (error) {
     return "Unnamed agency";
   }
-  return data.name.trim();
+
+  const name = typeof data === "string" ? data.trim() : "";
+  return name || "Unnamed agency";
 }

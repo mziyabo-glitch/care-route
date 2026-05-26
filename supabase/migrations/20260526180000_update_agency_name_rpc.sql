@@ -15,7 +15,12 @@ BEGIN
     RAISE EXCEPTION 'Agency name must be between 1 and 200 characters';
   END IF;
 
-  v_role := public.get_my_role(p_agency_id);
+  SELECT am.role INTO v_role
+  FROM public.agency_members am
+  WHERE am.user_id = auth.uid()
+    AND am.agency_id = p_agency_id
+  LIMIT 1;
+
   IF v_role IS NULL OR v_role NOT IN ('owner', 'admin', 'manager') THEN
     RAISE EXCEPTION 'Insufficient permissions to update agency name';
   END IF;

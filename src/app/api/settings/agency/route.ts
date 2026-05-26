@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentAgencyId, fetchAgencyName } from "@/lib/agency";
+import { getCurrentAgencyId } from "@/lib/agency";
 import { canEdit, getCurrentRole } from "@/lib/permissions";
+import { mapSettingsSaveError } from "@/lib/settings-errors";
 
 export async function PATCH(request: Request) {
   const agencyId = await getCurrentAgencyId();
@@ -40,24 +41,22 @@ export async function PATCH(request: Request) {
   });
 
   if (error) {
-    if (role === "owner" && error.message.includes("update_agency_name")) {
-      const { error: directErr } = await supabase
-        .from("agencies")
-        .update({ name })
-        .eq("id", agencyId);
-      if (directErr) {
-        return NextResponse.json({ error: directErr.message }, { status: 400 });
-      }
-      return NextResponse.json({ name });
-    }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    const status = error.message.toLowerCase().includes("not authenticated")
+      ? 401
+      : error.message.toLowerCase().includes("insufficient permissions")
+        ? 403
+        : 400;
+    return NextResponse.json(
+      { error: mapSettingsSaveError(error.message) },
+      { status }
+    );
   }
 
   const parsed = data as { name?: string } | null;
   const resolved =
-    typeof parsed?.name === "string"
-      ? parsed.name
-      : await fetchAgencyName(supabase, agencyId);
+    typeof parsed?.name === "string" && parsed.name.trim()
+      ? parsed.name.trim()
+      : name;
 
   return NextResponse.json({ name: resolved });
 }
