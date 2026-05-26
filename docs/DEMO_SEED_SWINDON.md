@@ -120,3 +120,24 @@ After seed (today = day 0):
 - Client names: `Demo Client {1..40} ({Swindon area})`
 
 No separate demo login is created — use your existing Supabase user as owner.
+
+## Care Control Centre dashboard — demo coverage & gaps
+
+After seed, the dashboard (`/dashboard`) should show non-zero **visits today**, mixed safety counts, **needs action** rows (missed, late, missing notes, in-progress, double-up gaps where seeded), rota capacity, billing/payroll today snapshot (manager/owner), and visit map preview with geocoded Swindon clients.
+
+| Dashboard area | Swindon seed support | Gap / note |
+|----------------|---------------------|------------|
+| Hero / agency name | Yes | Requires demo agency as `getCurrentAgencyId()` (reseed + sign-in) |
+| Today's safety status | Yes | Counts vary by time of day (late/due_soon need visits started today) |
+| Needs action | Yes | ~7% missed, ~8% no-notes, ~2% in_progress, double-up flags on subset |
+| Happening now / Up next | Partial | Strongest during morning–evening UK call windows; quiet overnight |
+| Rota capacity | Yes | 30 carers; daily assignment counts vary |
+| Compliance pulse (tracked) | Yes | Same signals as `/compliance` for today |
+| Compliance pulse (not tracked) | N/A | Care plan review overdue, training expiry, safeguarding — **not in seed or schema** |
+| Payroll snapshot (today) | Yes | Owner/admin; hours from actuals/planned — timesheet not auto-generated |
+| Billing snapshot (today) | Yes | Manager+; requires funder/rates (seeded) |
+| Visit map preview | Yes | Geocoded SN* postcodes; some clients may lack coords until geocode run |
+| Care plans — 5 clients without plan | Yes | 35/40 have plans — **no "overdue review" tile** (field not implemented) |
+| Viewer role demo | Not seeded | Viewer sees reduced dashboard (no billing/map tiles) — use owner account for full demo |
+
+**Smoke (dashboard):** Log in as seed owner → `/dashboard` → confirm agency name "Swindon Community Care Demo", today's visit count &gt; 0, and at least one needs-action card during UK daytime after seed.

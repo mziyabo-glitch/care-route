@@ -1,6 +1,8 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentAgencyId } from "@/lib/agency";
+import { getCurrentRole } from "@/lib/permissions";
+import { loadDashboardData } from "@/lib/dashboard-data";
+import { DashboardView } from "./dashboard-view";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -13,55 +15,12 @@ export default async function DashboardPage() {
   const agencyId = await getCurrentAgencyId();
   if (!agencyId) return null;
 
-  const { data: agency } = await supabase
-    .from("agencies")
-    .select("name")
-    .eq("id", agencyId)
-    .single();
+  const { role } = await getCurrentRole();
 
-  const [
-    { data: clientsCount },
-    { data: carersCount },
-    { data: visitsCount },
-    { data: visitsTodayCount },
-  ] = await Promise.all([
-    supabase.rpc("count_clients", { p_agency_id: agencyId }),
-    supabase.rpc("count_carers", { p_agency_id: agencyId }),
-    supabase.rpc("count_visits", { p_agency_id: agencyId }),
-    supabase.rpc("count_visits_today", { p_agency_id: agencyId }),
-  ]);
+  const data = await loadDashboardData(supabase, agencyId, {
+    userEmail: user.email,
+    role,
+  });
 
-  return (
-    <div className="space-y-8">
-      <div className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold text-slate-900">Agency</h1>
-        <p className="mt-2 text-lg text-slate-600">{agency?.name ?? "Your agency"}</p>
-      </div>
-
-      <div className="grid gap-6 sm:grid-cols-3">
-        <Link
-          href="/clients"
-          className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-slate-300 hover:shadow-md"
-        >
-          <h2 className="text-sm font-medium text-slate-500">Clients</h2>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">{clientsCount ?? 0}</p>
-        </Link>
-        <Link
-          href="/carers"
-          className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-slate-300 hover:shadow-md"
-        >
-          <h2 className="text-sm font-medium text-slate-500">Carers</h2>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">{carersCount ?? 0}</p>
-        </Link>
-        <Link
-          href="/visits"
-          className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-slate-300 hover:shadow-md"
-        >
-          <h2 className="text-sm font-medium text-slate-500">Visits</h2>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">{visitsCount ?? 0}</p>
-          <p className="mt-1 text-xs text-slate-500">{visitsTodayCount ?? 0} today</p>
-        </Link>
-      </div>
-    </div>
-  );
+  return <DashboardView data={data} />;
 }
