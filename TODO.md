@@ -36,14 +36,7 @@ Repo-complete items are checked below. **Production** columns require manual ver
 - **A6** Production smoke test passed on [https://care-route-two.vercel.app](https://care-route-two.vercel.app) - **2026-05-25** (`[docs/PRODUCTION_SMOKE_TEST.md](docs/PRODUCTION_SMOKE_TEST.md)`)
 - **A7** Bootstrap gap documented (no `care_plans` / `visit_care_notes` in bootstrap) — **repo**; run migrations after bootstrap — **manual**
 - **A8** `RUN_MIGRATIONS.md` migration order matches `supabase/migrations/` (34 files) — **repo**
-- **A9** Agency switcher v1 — **complete 2026-05-26** (`docs/AGENCY_SWITCHER.md`, cookie + localStorage + header UI)
-
-### Agency switcher v1 — **COMPLETE 2026-05-26**
-
-- Implementation: `AgencySwitcher`, `src/lib/agency-constants.ts`, `agency-client.ts`, `getCurrentAgencyId()` cookie validation
-- Docs: `docs/AGENCY_SWITCHER.md`, `docs/DEMO_SEED_SWINDON.md` (multi-agency smoke)
-- Verified: `tsc`, `npm run build`; live DB counts for dual-agency test user (see AGENCY_SWITCHER.md)
-- Backlog (docs only): cron/service scoping, edge/scripts audit, client `agency_id` body hardening, optional server preference table — see `docs/AGENCY_SWITCHER.md` § Future backlog
+- **A9** `getCurrentAgencyId()` multi-agency limitation — **repo** (newest `agency_members.created_at` only; no switcher UI — removed 2026-05-26, see `docs/AGENCY_SWITCHER.md`)
 
 ### Care planning + visit map (repo done; prod verify)
 

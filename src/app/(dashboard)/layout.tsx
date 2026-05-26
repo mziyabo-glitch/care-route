@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentAgencyId, getUserAgencies } from "@/lib/agency";
+import { getCurrentAgencyId } from "@/lib/agency";
 import {
   canAccessCompliance,
   canAccessVisitMap,
   getCurrentRole,
 } from "@/lib/permissions";
-import { AgencySwitcher } from "@/components/AgencySwitcher";
 import { DashboardNav } from "@/app/components/dashboard-nav";
 import { LogoutButton } from "@/app/(dashboard)/dashboard/logout-button";
 
@@ -24,7 +23,6 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  const agencies = await getUserAgencies();
   const agencyId = await getCurrentAgencyId();
   if (!agencyId) {
     redirect("/onboarding");
@@ -47,7 +45,6 @@ export default async function DashboardLayout({
             canAccessCompliance={showCompliance}
           />
           <div className="flex flex-wrap items-center justify-end gap-3 sm:gap-4">
-            <AgencySwitcher agencies={agencies} currentAgencyId={agencyId} />
             <span className="text-sm text-slate-500">{user.email}</span>
             <LogoutButton />
           </div>
