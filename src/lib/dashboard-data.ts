@@ -1,8 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Role } from "@/lib/permissions";
 import { canAccessCompliance, canEdit } from "@/lib/permissions";
+import { fetchAgencyName } from "@/lib/agency";
 import { getComplianceIssues } from "@/lib/compliance-data";
+import { resolveUserGreetingName } from "@/lib/user-display-name";
 import { getVisitMapRows, type VisitMapRow } from "@/lib/visit-map-data";
+
+export { resolveUserGreetingName } from "@/lib/user-display-name";
 import {
   dayRangeUtc,
   formatUkTime,
@@ -113,41 +117,6 @@ const UK_CALL_WINDOWS = [
   { name: "Bedtime", startMin: 19 * 60, endMin: 22 * 60 + 30 },
 ] as const;
 
-function metaString(
-  meta: Record<string, unknown>,
-  ...keys: string[]
-): string | null {
-  for (const key of keys) {
-    const v = meta[key];
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
-  return null;
-}
-
-/** First name for greeting; full name when both parts known. Falls back to email local-part only. */
-export function resolveUserGreetingName(user: {
-  email?: string | null;
-  user_metadata?: Record<string, unknown>;
-}): string {
-  const meta = user.user_metadata ?? {};
-  const first = metaString(meta, "first_name", "given_name");
-  const last = metaString(meta, "last_name", "family_name");
-  const full = metaString(meta, "full_name", "name");
-
-  if (first && last) return `${first} ${last}`;
-  if (first) return first;
-  if (full) {
-    const parts = full.split(/\s+/).filter(Boolean);
-    if (parts.length >= 2) return `${parts[0]} ${parts[parts.length - 1]}`;
-    return full;
-  }
-  if (!user.email) return "there";
-  const local = user.email.split("@")[0] ?? "";
-  const bit = local.split(/[.+_-]/)[0];
-  if (!bit) return "there";
-  return bit.charAt(0).toUpperCase() + bit.slice(1).toLowerCase();
-}
-
 function londonMinutesFromMidnight(iso: string): number {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/London",
@@ -243,13 +212,13 @@ export async function loadDashboardData(
   const now = new Date();
 
   const [
-    agencyRes,
+    agencyName,
     carersCountRes,
     visitRows,
     complianceToday,
     weekVisitsRes,
   ] = await Promise.all([
-    supabase.from("agencies").select("name").eq("id", agencyId).single(),
+    fetchAgencyName(supabase, agencyId),
     supabase.rpc("count_carers", { p_agency_id: agencyId }),
     getVisitMapRows(supabase, agencyId, today),
     getComplianceIssues(supabase, agencyId, today, today).catch(() => ({
@@ -263,7 +232,6 @@ export async function loadDashboardData(
     }),
   ]);
 
-  const agencyName = agencyRes.data?.name ?? "Your agency";
   const totalCarers = Number(carersCountRes.data ?? 0);
   const weekVisits: WeekVisit[] = Array.isArray(weekVisitsRes.data)
     ? (weekVisitsRes.data as WeekVisit[])

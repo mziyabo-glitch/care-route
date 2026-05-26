@@ -84,7 +84,7 @@ export function DashboardNav({
         </Link>
       )}
       <Link
-        href="/settings/members"
+        href="/settings"
         className={`${link} ${pathname.startsWith("/settings") ? activeLink : inactiveLink}`}
       >
         Settings
