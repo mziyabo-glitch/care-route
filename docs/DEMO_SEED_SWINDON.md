@@ -37,10 +37,11 @@ Re-running is safe: carers/clients/plans are reused; demo-tagged visits are repl
 ## After seeding
 
 1. Log in with the account matching `DEMO_SEED_OWNER_USER_ID`.
-2. The app uses your **newest** `agency_members` row (by `created_at`). If you own multiple agencies, re-run the seed and check the bootstrap verification block — it lists memberships and which agency the app will resolve. Agency switching is not implemented yet.
-3. **Payroll:** open Payroll and generate a timesheet for a UTC range covering the next 14 days (RPC requires your logged-in admin/owner session).
-4. **Compliance:** `/compliance` — missed visits + completed visits without care notes.
-5. **Visit map:** `/visit-map` — geocoded Swindon postcodes and GPS check-in/out on completed visits.
+2. If you belong to multiple agencies (e.g. Pro Health + Swindon demo on the same user), use the **agency switcher** in the dashboard header (dropdown). Default is the newest membership by `created_at` until you pick another agency. See [`docs/AGENCY_SWITCHER.md`](AGENCY_SWITCHER.md) (v1 complete).
+3. **Agency switcher smoke:** select **Swindon Community Care Demo** — expect ~40 clients, 30 carers, 168 visits on dashboard/clients/carers/visits. Switch to **Pro Health** — counts should differ (e.g. ~19 clients). Reload to confirm `care-route.activeAgencyId` persists.
+4. **Payroll:** open Payroll and generate a timesheet for a UTC range covering the next 14 days (RPC requires your logged-in admin/owner session).
+5. **Compliance:** `/compliance` — missed visits + completed visits without care notes.
+6. **Visit map:** `/visit-map` — geocoded Swindon postcodes and GPS check-in/out on completed visits.
 
 ## What gets created
 

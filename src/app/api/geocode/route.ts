@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCurrentAgencyId } from "@/lib/agency";
 import { createClient } from "@/lib/supabase/server";
 
 const POSTCODES_IO = "https://api.postcodes.io/postcodes";
@@ -28,21 +29,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: membership } = await supabase
-      .from("agency_members")
-      .select("agency_id")
-      .eq("user_id", user.id)
-      .limit(1)
-      .maybeSingle();
+    const agencyId = await getCurrentAgencyId();
 
-    if (!membership) {
+    if (!agencyId) {
       return NextResponse.json(
         { ok: false, error: "No agency membership" },
         { status: 403 }
       );
     }
-
-    const agencyId = membership.agency_id;
 
     const { data: client, error: clientError } = await supabase
       .rpc("get_client_postcode", {
