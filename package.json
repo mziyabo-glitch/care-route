@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "migrate:copy": "node -e \"require('fs').createReadStream('supabase/migrations/20260224000000_visit_actuals_payroll.sql').pipe(process.stdout)\""
+    "migrate:copy": "node -e \"require('fs').createReadStream('supabase/migrations/20260224000000_visit_actuals_payroll.sql').pipe(process.stdout)\"",
+    "seed:swindon-demo": "tsx scripts/seed-swindon-demo-agency.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
@@ -25,9 +26,11 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
+    "dotenv-flow": "^4.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
