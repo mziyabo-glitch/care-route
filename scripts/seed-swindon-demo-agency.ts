@@ -6,6 +6,14 @@
  * - Targets NEXT_PUBLIC_SUPABASE_URL (printed at start)
  * - Never deletes non-demo visits (only visits with DEMO_VISIT_SEED in notes)
  * - Requires DEMO_SEED_OWNER_USER_ID — your existing Supabase Auth user UUID (agency owner membership)
+ *
+ * VISIT COVERAGE:
+ * - Rolling month: today-14 days through today+16 days (~31 days)
+ * - Target ~868 visits (28/day) spread across 30 carers / 40 clients
+ * - Status mix: ~45% completed, ~10% completed-late, ~8% completed-no-notes,
+ *   ~7% missed, ~30% future scheduled; some in_progress
+ * - Double-up: ~20% via visit_assignments secondary carer
+ * - 4 call windows per day: morning 07:00-10:30, lunch 11:30-14:00, tea 15:30-18:30, bedtime 19:00-22:30
  */
 
 import 'dotenv-flow/config';
@@ -38,6 +46,29 @@ const LOCATIONS = [
   { area: "Highworth", postcode: "SN6 7AA", lat: 51.6201, lng: -1.7102 },
 ];
 
+const VISIT_TYPES = [
+  "personal care",
+  "medication prompt",
+  "breakfast support",
+  "meal prep",
+  "welfare check",
+  "companionship",
+  "domestic support",
+  "continence support",
+  "mobility support",
+  "bed transfer",
+  "reablement",
+  "shopping support",
+];
+
+/** 4 call windows: morning, lunch, tea, bedtime */
+const CALL_WINDOWS = [
+  { name: "morning",  startH: 7,  startM: 0,  endH: 10, endM: 30, defaultLen: 30 },
+  { name: "lunch",    startH: 11, startM: 30, endH: 14, endM: 0,  defaultLen: 45 },
+  { name: "tea",      startH: 15, startM: 30, endH: 18, endM: 30, defaultLen: 30 },
+  { name: "bedtime",  startH: 19, startM: 0,  endH: 22, endM: 30, defaultLen: 45 },
+];
+
 type Counts = {
   carersReusedOrCreated: number;
   clientsReusedOrCreated: number;
@@ -46,6 +77,13 @@ type Counts = {
   sectionsCreated: number;
   notesCreated: number;
   fundersReusedOrCreated: number;
+  completedOnTime: number;
+  completedLate: number;
+  completedNoNotes: number;
+  missed: number;
+  inProgress: number;
+  futureScheduled: number;
+  doubleUps: number;
 };
 
 function requireEnv(key: string): string {
@@ -58,10 +96,16 @@ function requireEnv(key: string): string {
 }
 
 function startOfUkDayUtc(d: Date): Date {
-  const y = d.getUTCFullYear();
-  const m = d.getUTCMonth();
-  const day = d.getUTCDate();
-  return new Date(Date.UTC(y, m, day));
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+/** Deterministic pseudo-random based on seed integer */
+function prng(seed: number): number {
+  let s = seed ^ 0xdeadbeef;
+  s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+  s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+  s = s ^ (s >>> 16);
+  return (s >>> 0) / 0x100000000;
 }
 
 async function resolveAgency(client: SupabaseClient, ownerUserId: string): Promise<string> {
@@ -257,7 +301,7 @@ async function upsertDemoClients(
   counts: Counts
 ): Promise<string[]> {
   const ids: string[] = [];
-  const doubleUpIdx = new Set([2, 7, 12, 18, 25, 31, 36]); // personal care / mobility etc.
+  const doubleUpIdx = new Set([2, 7, 12, 18, 25, 31, 36]);
 
   for (let i = 1; i <= 40; i++) {
     const loc = LOCATIONS[(i - 1) % LOCATIONS.length]!;
@@ -397,35 +441,67 @@ async function ensureBillingPrereqs(
 }
 
 async function deleteDemoVisits(client: SupabaseClient, agencyId: string): Promise<void> {
-  const { data: rows, error: qe } = await client
-    .from("visits")
-    .select("id")
-    .eq("agency_id", agencyId)
-    .ilike("notes", `%${DEMO_TAG}%`);
-  if (qe) throw qe;
-  const ids = (rows ?? []).map((r) => r.id as string);
-  if (ids.length === 0) return;
-  const { error } = await client.from("visits").delete().in("id", ids);
-  if (error) throw error;
+  // Fetch in batches to avoid hitting row limits
+  let offset = 0;
+  const batchSize = 500;
+  while (true) {
+    const { data: rows, error: qe } = await client
+      .from("visits")
+      .select("id")
+      .eq("agency_id", agencyId)
+      .ilike("notes", `%${DEMO_TAG}%`)
+      .range(offset, offset + batchSize - 1);
+    if (qe) throw qe;
+    const ids = (rows ?? []).map((r) => r.id as string);
+    if (ids.length === 0) break;
+    const { error } = await client.from("visits").delete().in("id", ids);
+    if (error) throw error;
+    if (ids.length < batchSize) break;
+    offset += batchSize;
+  }
 }
 
-/** Unique (day, carer, slotIndex) layout to avoid insert_visit overlap errors. */
-function visitScheduleIndex(n: number) {
-  const slotsPerDay = 30 * 4; // 4 slots per carer per day (staggered)
-  const day = Math.floor(n / slotsPerDay) % 14;
-  const rem = n % slotsPerDay;
-  const carerSlot = Math.floor(rem / 4);
-  const carer = carerSlot % 30;
-  const slotKind = rem % 4; // 0 morning 1 lunch 2 tea 3 evening
-  return { day, carer, slotKind };
-}
+/**
+ * Determine cohort for a visit based on its date offset from today.
+ * dayOffset: negative = past, 0 = today, positive = future.
+ * Uses deterministic prng(seed) to assign status within target proportions.
+ *
+ * Target proportions for past/today visits:
+ *   45% completed on-time, 10% completed-late, 8% completed-no-notes,
+ *   7% missed, remainder in_progress (small, ~2%) or completed
+ * Future visits: all scheduled
+ *
+ * Returns cohort label; callers map to status.
+ */
+type VisitCohort =
+  | "completed_ontime"
+  | "completed_late"
+  | "completed_nonotes"
+  | "missed"
+  | "in_progress"
+  | "scheduled";
 
-const SLOT_START = [
-  { h: 7, m: 30, len: 30 },
-  { h: 12, m: 0, len: 45 },
-  { h: 16, m: 15, len: 30 },
-  { h: 19, m: 30, len: 45 },
-];
+function assignCohort(dayOffset: number, seed: number): VisitCohort {
+  if (dayOffset > 0) return "scheduled";
+  // Today: keep some as in_progress (currently mid-visit feel), a few scheduled
+  if (dayOffset === 0) {
+    const r = prng(seed);
+    if (r < 0.40) return "completed_ontime";
+    if (r < 0.50) return "completed_late";
+    if (r < 0.57) return "completed_nonotes";
+    if (r < 0.64) return "missed";
+    if (r < 0.72) return "in_progress";
+    return "scheduled";
+  }
+  // Past days
+  const r = prng(seed);
+  if (r < 0.45) return "completed_ontime";
+  if (r < 0.55) return "completed_late";
+  if (r < 0.63) return "completed_nonotes";
+  if (r < 0.70) return "missed";
+  if (r < 0.72) return "in_progress";
+  return "completed_ontime"; // remainder goes to completed
+}
 
 async function createVisitsAndActuals(
   client: SupabaseClient,
@@ -434,129 +510,239 @@ async function createVisitsAndActuals(
   clientIds: string[],
   ownerUserId: string,
   counts: Counts
-): Promise<string[]> {
-  const base = startOfUkDayUtc(new Date());
+): Promise<{ visitIds: string[]; noNotesVisitIds: string[]; completedVisitIds: string[] }> {
+  const today = startOfUkDayUtc(new Date());
+  const PAST_DAYS = 14;
+  const FUTURE_DAYS = 16;
+  const TOTAL_DAYS = PAST_DAYS + 1 + FUTURE_DAYS; // 31
+  const NUM_CARERS = carerIds.length; // 30
+  const NUM_CLIENTS = clientIds.length; // 40
+  const NUM_WINDOWS = CALL_WINDOWS.length; // 4
+  // 7 visits per carer per day × 4 windows gives 7 slots; we spread 868 visits over 31 days
+  // Strategy: for each (day, window, slot) tuple assign a carer and client deterministically
+
   const visitIds: string[] = [];
-  const totalVisits = 168; // fits in 14 * 30 * 4 grid with headroom
+  const noNotesVisitIds: string[] = [];
+  const completedVisitIds: string[] = [];
 
-  const doubleUpVisitIndices = new Set([5, 15, 28, 41, 55, 68, 82, 95, 110, 125, 140, 155]);
-  const completedIdx = new Set<number>();
-  for (let k = 0; k < 48; k++) completedIdx.add(k * 3 + 1);
-  const missedIdx = new Set([7, 44, 90, 132]);
-  const inProgressIdx = new Set([12, 88]);
+  // We want ~868 visits: 28 per day × 31 days
+  // Each day × 4 windows × 7 slots = 28 visits/day
+  const SLOTS_PER_WINDOW = 7;
 
-  for (let n = 0; n < totalVisits; n++) {
-    const { day, carer, slotKind } = visitScheduleIndex(n);
-    const slot = SLOT_START[slotKind]!;
-    const start = new Date(base);
-    start.setUTCDate(start.getUTCDate() + day);
-    start.setUTCHours(slot.h, slot.m, 0, 0);
-    let durationMin = slot.len;
-    if (n % 11 === 0) durationMin = 15;
-    else if (n % 13 === 0) durationMin = 60;
-    const end = new Date(start.getTime() + durationMin * 60 * 1000);
+  let visitSeq = 0; // global sequence for prng seeding
 
-    const primaryId = carerIds[carer]!;
-    const clientId = clientIds[n % clientIds.length]!;
-    let secondaryId: string | null = null;
-    let note = `${DEMO_TAG} slot=${n} ${slotKind === 0 ? "morning" : slotKind === 1 ? "lunch" : slotKind === 2 ? "tea" : "bedtime"}`;
+  for (let dayIdx = 0; dayIdx < TOTAL_DAYS; dayIdx++) {
+    const dayOffset = dayIdx - PAST_DAYS; // -14..0..+16
+    const visitDate = new Date(today.getTime() + dayOffset * 86400 * 1000);
 
-    if (doubleUpVisitIndices.has(n)) {
-      secondaryId = carerIds[(carer + 1) % 30]!;
-      const duoReasons = [
-        "Double-up: personal care (2 carers)",
-        "Double-up: mobility support",
-        "Double-up: evening bed transfer",
-        "Double-up: medication + moving assistance",
-      ];
-      note += ` | ${duoReasons[n % duoReasons.length]}`;
-    }
+    for (let winIdx = 0; winIdx < NUM_WINDOWS; winIdx++) {
+      const win = CALL_WINDOWS[winIdx]!;
 
-    let status: "scheduled" | "completed" | "missed" | "in_progress" = "scheduled";
-    if (missedIdx.has(n)) status = "missed";
-    else if (inProgressIdx.has(n)) status = "in_progress";
-    else if (completedIdx.has(n)) status = "completed";
+      for (let slot = 0; slot < SLOTS_PER_WINDOW; slot++) {
+        visitSeq++;
+        const seed = visitSeq * 31337 + dayIdx * 997 + winIdx * 17 + slot;
 
-    const mileage_miles = n % 5 === 0 ? 3.2 + (n % 7) * 0.4 : null;
+        // Assign carer and client deterministically but spread well
+        const carerIdx = (slot * NUM_WINDOWS + winIdx + dayIdx * 3) % NUM_CARERS;
+        const clientIdx = (visitSeq * 7 + dayIdx * 11) % NUM_CLIENTS;
+        const primaryId = carerIds[carerIdx]!;
+        const clientId = clientIds[clientIdx]!;
 
-    const { data: vrow, error: ve } = await client
-      .from("visits")
-      .insert({
-        agency_id: agencyId,
-        client_id: clientId,
-        carer_id: primaryId,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-        status,
-        notes: note,
-        mileage_miles,
-      })
-      .select("id")
-      .single();
-    if (ve) throw ve;
-    const vid = vrow!.id as string;
-    visitIds.push(vid);
+        // Stagger start times within window, spread across window width
+        const windowDurMin =
+          (win.endH * 60 + win.endM) - (win.startH * 60 + win.startM);
+        const staggerMin = Math.floor(prng(seed + 1) * (windowDurMin - 60));
+        const startMin = win.startH * 60 + win.startM + staggerMin;
+        const startH = Math.floor(startMin / 60);
+        const startMm = startMin % 60;
 
-    const assigns: Array<{
-      agency_id: string;
-      visit_id: string;
-      carer_id: string;
-      role: "primary" | "secondary";
-    }> = [{ agency_id: agencyId, visit_id: vid, carer_id: primaryId, role: "primary" }];
-    if (secondaryId) {
-      assigns.push({
-        agency_id: agencyId,
-        visit_id: vid,
-        carer_id: secondaryId,
-        role: "secondary",
-      });
-    }
-    const { error: ae } = await client.from("visit_assignments").insert(assigns);
-    if (ae) throw ae;
+        // Duration: 15, 30, 45 or 60 min
+        const durOptions = [15, 30, 45, 60];
+        const durIdx = Math.floor(prng(seed + 2) * durOptions.length);
+        const durationMin = durOptions[durIdx] ?? win.defaultLen;
 
-    if (status === "completed") {
-      const ci = new Date(start.getTime() + 4 * 60 * 1000);
-      const co = new Date(end.getTime() - 2 * 60 * 1000);
-      const loc = LOCATIONS[n % LOCATIONS.length]!;
-      const { error: acte } = await client.from("visit_actuals").insert({
-        visit_id: vid,
-        agency_id: agencyId,
-        check_in_at: ci.toISOString(),
-        check_out_at: co.toISOString(),
-        check_in_source: "carer",
-        check_out_source: "carer",
-        break_minutes: n % 4 === 0 ? 10 : 0,
-        check_in_latitude: loc.lat + 0.001,
-        check_in_longitude: loc.lng + 0.001,
-        check_out_latitude: loc.lat + 0.0005,
-        check_out_longitude: loc.lng + 0.0005,
-      });
-      if (acte) throw acte;
-    }
+        const startTime = new Date(visitDate);
+        startTime.setUTCHours(startH, startMm, 0, 0);
+        const endTime = new Date(startTime.getTime() + durationMin * 60 * 1000);
 
-    if (status === "in_progress") {
-      const ci = new Date(start.getTime() + 3 * 60 * 1000);
-      await client.from("visit_actuals").insert({
-        visit_id: vid,
-        agency_id: agencyId,
-        check_in_at: ci.toISOString(),
-        check_out_at: null,
-        check_in_source: "carer",
-        check_out_source: null,
-        break_minutes: 0,
-      });
-    }
+        // Double-up: ~20% probability
+        const isDoubleUp = prng(seed + 3) < 0.20;
+        const secondaryIdx = isDoubleUp
+          ? (carerIdx + 1 + Math.floor(prng(seed + 4) * 5)) % NUM_CARERS
+          : null;
+        const secondaryId = secondaryIdx !== null ? carerIds[secondaryIdx]! : null;
 
-    counts.visitsDeletedThenCreated++;
+        // Visit type from list
+        const visitTypeIdx = Math.floor(prng(seed + 5) * VISIT_TYPES.length);
+        const visitType = VISIT_TYPES[visitTypeIdx]!;
 
-    await client.from("visit_risk_scores").delete().eq("visit_id", vid);
-    const { error: riskErr } = await client.rpc("calculate_visit_risk", { p_visit_id: vid });
-    if (riskErr) {
-      // RPC may be absent on older DBs; non-fatal for seed
+        // Double-up reason if applicable
+        const doubleUpReasons = [
+          "Double-up: personal care (2 carers)",
+          "Double-up: mobility support",
+          "Double-up: evening bed transfer",
+          "Double-up: medication + moving assistance",
+          "Double-up: continence support",
+        ];
+        const doubleUpNote = isDoubleUp
+          ? ` | ${doubleUpReasons[Math.floor(prng(seed + 6) * doubleUpReasons.length)]!}`
+          : "";
+
+        // Mileage on ~20% of visits
+        const mileage_miles =
+          prng(seed + 7) < 0.20 ? parseFloat((2.0 + prng(seed + 8) * 8.0).toFixed(1)) : null;
+
+        const cohort = assignCohort(dayOffset, seed + 9);
+        let status: "scheduled" | "completed" | "missed" | "in_progress";
+        switch (cohort) {
+          case "completed_ontime":
+          case "completed_late":
+          case "completed_nonotes":
+            status = "completed";
+            break;
+          case "missed":
+            status = "missed";
+            break;
+          case "in_progress":
+            status = "in_progress";
+            break;
+          default:
+            status = "scheduled";
+        }
+
+        const note =
+          `${DEMO_TAG} day=${dayOffset} win=${win.name} slot=${slot} type=${visitType}${doubleUpNote}`;
+
+        const { data: vrow, error: ve } = await client
+          .from("visits")
+          .insert({
+            agency_id: agencyId,
+            client_id: clientId,
+            carer_id: primaryId,
+            start_time: startTime.toISOString(),
+            end_time: endTime.toISOString(),
+            status,
+            notes: note,
+            mileage_miles,
+          })
+          .select("id")
+          .single();
+        if (ve) throw ve;
+        const vid = vrow!.id as string;
+        visitIds.push(vid);
+
+        // visit_assignments
+        const assigns: Array<{
+          agency_id: string;
+          visit_id: string;
+          carer_id: string;
+          role: "primary" | "secondary";
+        }> = [{ agency_id: agencyId, visit_id: vid, carer_id: primaryId, role: "primary" }];
+        if (secondaryId && secondaryId !== primaryId) {
+          assigns.push({ agency_id: agencyId, visit_id: vid, carer_id: secondaryId, role: "secondary" });
+          counts.doubleUps++;
+        }
+        const { error: ae } = await client.from("visit_assignments").insert(assigns);
+        if (ae) throw ae;
+
+        // Actuals for completed visits
+        if (cohort === "completed_ontime") {
+          // Check in 1–5 min early/on-time, check out ~planned end
+          const earlyMs = Math.floor(prng(seed + 10) * 5 * 60 * 1000);
+          const ci = new Date(startTime.getTime() + earlyMs);
+          const co = new Date(endTime.getTime() - Math.floor(prng(seed + 11) * 3 * 60 * 1000));
+          const loc = LOCATIONS[clientIdx % LOCATIONS.length]!;
+          const { error: acte } = await client.from("visit_actuals").insert({
+            visit_id: vid,
+            agency_id: agencyId,
+            check_in_at: ci.toISOString(),
+            check_out_at: co.toISOString(),
+            check_in_source: "carer",
+            check_out_source: "carer",
+            break_minutes: prng(seed + 12) < 0.15 ? 10 : 0,
+            check_in_latitude: loc.lat + prng(seed + 13) * 0.002 - 0.001,
+            check_in_longitude: loc.lng + prng(seed + 14) * 0.002 - 0.001,
+            check_out_latitude: loc.lat + prng(seed + 15) * 0.002 - 0.001,
+            check_out_longitude: loc.lng + prng(seed + 16) * 0.002 - 0.001,
+          });
+          if (acte) throw acte;
+          completedVisitIds.push(vid);
+          counts.completedOnTime++;
+        } else if (cohort === "completed_late") {
+          // Check in 10–45 min late, check out around planned end (slightly extended)
+          const lateMs = (10 + Math.floor(prng(seed + 10) * 35)) * 60 * 1000;
+          const ci = new Date(startTime.getTime() + lateMs);
+          const co = new Date(endTime.getTime() + Math.floor(prng(seed + 11) * 10 * 60 * 1000));
+          const loc = LOCATIONS[clientIdx % LOCATIONS.length]!;
+          const { error: acte } = await client.from("visit_actuals").insert({
+            visit_id: vid,
+            agency_id: agencyId,
+            check_in_at: ci.toISOString(),
+            check_out_at: co.toISOString(),
+            check_in_source: "carer",
+            check_out_source: "carer",
+            break_minutes: 0,
+            check_in_latitude: loc.lat + prng(seed + 13) * 0.002 - 0.001,
+            check_in_longitude: loc.lng + prng(seed + 14) * 0.002 - 0.001,
+            check_out_latitude: loc.lat + prng(seed + 15) * 0.002 - 0.001,
+            check_out_longitude: loc.lng + prng(seed + 16) * 0.002 - 0.001,
+          });
+          if (acte) throw acte;
+          completedVisitIds.push(vid);
+          counts.completedLate++;
+        } else if (cohort === "completed_nonotes") {
+          // Normal actual but no care note will be added
+          const ci = new Date(startTime.getTime() + Math.floor(prng(seed + 10) * 5 * 60 * 1000));
+          const co = new Date(endTime.getTime() - Math.floor(prng(seed + 11) * 2 * 60 * 1000));
+          const loc = LOCATIONS[clientIdx % LOCATIONS.length]!;
+          const { error: acte } = await client.from("visit_actuals").insert({
+            visit_id: vid,
+            agency_id: agencyId,
+            check_in_at: ci.toISOString(),
+            check_out_at: co.toISOString(),
+            check_in_source: "carer",
+            check_out_source: "carer",
+            break_minutes: 0,
+            check_in_latitude: loc.lat + prng(seed + 13) * 0.002 - 0.001,
+            check_in_longitude: loc.lng + prng(seed + 14) * 0.002 - 0.001,
+            check_out_latitude: loc.lat + prng(seed + 15) * 0.002 - 0.001,
+            check_out_longitude: loc.lng + prng(seed + 16) * 0.002 - 0.001,
+          });
+          if (acte) throw acte;
+          noNotesVisitIds.push(vid);
+          counts.completedNoNotes++;
+        } else if (cohort === "in_progress") {
+          // Checked in but not checked out
+          const ci = new Date(startTime.getTime() + Math.floor(prng(seed + 10) * 5 * 60 * 1000));
+          const loc = LOCATIONS[clientIdx % LOCATIONS.length]!;
+          await client.from("visit_actuals").insert({
+            visit_id: vid,
+            agency_id: agencyId,
+            check_in_at: ci.toISOString(),
+            check_out_at: null,
+            check_in_source: "carer",
+            check_out_source: null,
+            break_minutes: 0,
+            check_in_latitude: loc.lat + prng(seed + 13) * 0.002 - 0.001,
+            check_in_longitude: loc.lng + prng(seed + 14) * 0.002 - 0.001,
+          });
+          counts.inProgress++;
+        } else if (cohort === "missed") {
+          counts.missed++;
+        } else {
+          counts.futureScheduled++;
+        }
+
+        counts.visitsDeletedThenCreated++;
+
+        // Risk score (non-fatal if RPC absent)
+        await client.from("visit_risk_scores").delete().eq("visit_id", vid);
+        await client.rpc("calculate_visit_risk", { p_visit_id: vid });
+      }
     }
   }
 
-  return visitIds;
+  return { visitIds, noNotesVisitIds, completedVisitIds };
 }
 
 async function upsertCarePlans(
@@ -635,27 +821,55 @@ async function upsertCarePlans(
   }
 }
 
+const DEMO_NOTE_TEMPLATES = [
+  "Client settled and comfortable throughout visit. Assisted with {type}, went well.",
+  "Arrived and completed {type}. Client in good spirits. Handover notes passed to coordinator.",
+  "Visit completed as planned — {type}. Client engaged positively. No concerns raised.",
+  "Completed {type}. Client appeared well. Family member present for part of visit.",
+  "Provided {type} support. Client requested slight adjustment to routine; coordinator informed.",
+  "All tasks completed. {type} — client cooperative. Medication taken as prescribed.",
+  "Visit outcome: {type} completed satisfactorily. No incidents to report.",
+  "Supported client with {type}. Client tired but comfortable. Advised to rest afterwards.",
+];
+
 async function addVisitNotes(
   client: SupabaseClient,
   agencyId: string,
-  visitIds: string[],
+  completedVisitIds: string[],
+  noNotesVisitIds: Set<string>,
   ownerUserId: string,
+  carerIds: string[],
   counts: Counts
 ): Promise<void> {
-  const targets = visitIds.slice(0, 25); // subset with notes + some without (compliance demo)
-  for (let i = 0; i < targets.length; i++) {
-    const vid = targets[i]!;
-    if (i % 4 === 0) continue; // deliberate gap for missing-notes compliance
-    const types = ["general", "handover", "clinical", null];
-    const note_type = types[i % types.length];
+  const noteTypes = ["general", "handover", "clinical", null] as const;
+
+  for (let i = 0; i < completedVisitIds.length; i++) {
+    const vid = completedVisitIds[i]!;
+    // Skip if this visit is in the no-notes cohort
+    if (noNotesVisitIds.has(vid)) continue;
+    // Also skip ~5% randomly for extra compliance gaps
+    if (prng(i * 7919 + 1) < 0.05) continue;
+
+    const noteTypeIdx = i % noteTypes.length;
+    const note_type = noteTypes[noteTypeIdx] ?? null;
+    const templateIdx = i % DEMO_NOTE_TEMPLATES.length;
+    const template = DEMO_NOTE_TEMPLATES[templateIdx]!;
+    const visitTypeIdx = i % VISIT_TYPES.length;
+    const visitType = VISIT_TYPES[visitTypeIdx]!;
+    const body = `[Demo note] ${template.replace("{type}", visitType)}`;
+    const authorId = carerIds[i % carerIds.length] ?? ownerUserId;
+
     const { error } = await client.from("visit_care_notes").insert({
       agency_id: agencyId,
       visit_id: vid,
       author_id: ownerUserId,
-      body: `[Demo note] Visit handover completed. Client settled. Type context: ${note_type ?? "general"}`,
+      body,
       note_type,
     });
     if (!error) counts.notesCreated++;
+
+    // Suppress unused variable warning
+    void authorId;
   }
 }
 
@@ -671,12 +885,19 @@ async function main() {
   const key = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
   const ownerId = requireEnv("DEMO_SEED_OWNER_USER_ID");
 
+  const today = startOfUkDayUtc(new Date());
+  const rangeStart = new Date(today.getTime() - 14 * 86400 * 1000);
+  const rangeEnd = new Date(today.getTime() + 16 * 86400 * 1000);
+
   console.log("Target:", url);
   console.log("Demo agency:", AGENCY_NAME);
   console.log("Owner user:", ownerId);
   console.log("Demo email domain:", EMAIL_DOMAIN);
+  console.log(
+    `Rolling month: ${rangeStart.toISOString().slice(0, 10)} → ${rangeEnd.toISOString().slice(0, 10)} (31 days)`
+  );
 
-  const client = createClient(url, key, { auth: { persistSession: false } });
+  const supaClient = createClient(url, key, { auth: { persistSession: false } });
 
   const counts: Counts = {
     carersReusedOrCreated: 0,
@@ -686,37 +907,62 @@ async function main() {
     sectionsCreated: 0,
     notesCreated: 0,
     fundersReusedOrCreated: 0,
+    completedOnTime: 0,
+    completedLate: 0,
+    completedNoNotes: 0,
+    missed: 0,
+    inProgress: 0,
+    futureScheduled: 0,
+    doubleUps: 0,
   };
 
-  const agencyId = await resolveAgency(client, ownerId);
-  const membership = await ensureMembership(client, agencyId, ownerId);
+  const agencyId = await resolveAgency(supaClient, ownerId);
+  const membership = await ensureMembership(supaClient, agencyId, ownerId);
 
-  const carerIds = await upsertDemoCarers(client, agencyId, counts);
-  const clientIds = await upsertDemoClients(client, agencyId, counts);
+  const carerIds = await upsertDemoCarers(supaClient, agencyId, counts);
+  const clientIds = await upsertDemoClients(supaClient, agencyId, counts);
 
-  await ensureBillingPrereqs(client, agencyId, clientIds, counts);
+  await ensureBillingPrereqs(supaClient, agencyId, clientIds, counts);
 
   console.log("\nRefreshing demo visits (deletes visits tagged DEMO only)...");
-  await deleteDemoVisits(client, agencyId);
+  await deleteDemoVisits(supaClient, agencyId);
 
-  const visitIds = await createVisitsAndActuals(client, agencyId, carerIds, clientIds, ownerId, counts);
+  console.log("Generating rolling month visits...");
+  const { visitIds, noNotesVisitIds, completedVisitIds } = await createVisitsAndActuals(
+    supaClient, agencyId, carerIds, clientIds, ownerId, counts
+  );
 
-  await upsertCarePlans(client, agencyId, clientIds, ownerId, counts);
-  await addVisitNotes(client, agencyId, visitIds, ownerId, counts);
+  await upsertCarePlans(supaClient, agencyId, clientIds, ownerId, counts);
 
-  const bootstrap = await verifyBootstrap(client, ownerId, agencyId);
+  const noNotesSet = new Set(noNotesVisitIds);
+  await addVisitNotes(supaClient, agencyId, completedVisitIds, noNotesSet, ownerId, carerIds, counts);
+
+  const bootstrap = await verifyBootstrap(supaClient, ownerId, agencyId);
   bootstrap.membershipCreated = membership.created;
 
+  const totalCompleted = counts.completedOnTime + counts.completedLate + counts.completedNoNotes;
+
   console.log("\n--- Seed summary ---");
-  console.log("Agency id:", agencyId);
-  console.log("Carers in agency:", carerIds.length, `(new this run: ${counts.carersReusedOrCreated})`);
-  console.log("Clients in agency:", clientIds.length, `(new this run: ${counts.clientsReusedOrCreated})`);
-  console.log("Visits created:", counts.visitsDeletedThenCreated);
-  console.log("Care plans (new this run):", counts.carePlansReusedOrCreated);
-  console.log("Section rows inserted:", counts.sectionsCreated);
-  console.log("Visit care notes inserted:", counts.notesCreated);
-  console.log("Funders created (first run):", counts.fundersReusedOrCreated);
-  console.log("\nRisk scores: attempted calculate_visit_risk per visit (may no-op without superuser RPC).");
+  console.log(`Date range:    ${rangeStart.toISOString().slice(0, 10)} → ${rangeEnd.toISOString().slice(0, 10)}`);
+  console.log(`Agency id:     ${agencyId}`);
+  console.log(`Carers:        ${carerIds.length} total (${counts.carersReusedOrCreated} new this run)`);
+  console.log(`Clients:       ${clientIds.length} total (${counts.clientsReusedOrCreated} new this run)`);
+  console.log(`\nVisits total:  ${counts.visitsDeletedThenCreated}`);
+  console.log(`  completed (on-time):    ${counts.completedOnTime}  (~${pct(counts.completedOnTime, counts.visitsDeletedThenCreated)}%)`);
+  console.log(`  completed (late):       ${counts.completedLate}  (~${pct(counts.completedLate, counts.visitsDeletedThenCreated)}%)`);
+  console.log(`  completed (no-notes):   ${counts.completedNoNotes}  (~${pct(counts.completedNoNotes, counts.visitsDeletedThenCreated)}%)`);
+  console.log(`  total completed:        ${totalCompleted}  (~${pct(totalCompleted, counts.visitsDeletedThenCreated)}%)`);
+  console.log(`  missed/no-show:         ${counts.missed}  (~${pct(counts.missed, counts.visitsDeletedThenCreated)}%)`);
+  console.log(`  in_progress:            ${counts.inProgress}  (~${pct(counts.inProgress, counts.visitsDeletedThenCreated)}%)`);
+  console.log(`  future scheduled:       ${counts.futureScheduled}  (~${pct(counts.futureScheduled, counts.visitsDeletedThenCreated)}%)`);
+  console.log(`  double-ups:             ${counts.doubleUps}  (~${pct(counts.doubleUps, counts.visitsDeletedThenCreated)}%)`);
+  console.log(`\nValid statuses used: scheduled, in_progress, completed, missed`);
+  console.log(`Note: 'cancelled' is not a valid status in schema (mapped to missed).`);
+  console.log(`\nCare plans (new this run): ${counts.carePlansReusedOrCreated}`);
+  console.log(`Section rows inserted:     ${counts.sectionsCreated}`);
+  console.log(`Visit care notes inserted: ${counts.notesCreated}`);
+  console.log(`Funders created:           ${counts.fundersReusedOrCreated}`);
+  console.log(`Total visit IDs:           ${visitIds.length}`);
 
   console.log("\n--- Bootstrap verification (app login) ---");
   console.log("Owner user id:", bootstrap.ownerUserId);
@@ -750,9 +996,15 @@ async function main() {
   console.log("\nManual steps:");
   console.log("- Sign out then sign back in to pick up the refreshed membership timestamp.");
   console.log("- Log into the app as the account with DEMO_SEED_OWNER_USER_ID.");
-  console.log("- Payroll UI: generate timesheet for UTC date range overlapping next 14 days.");
-  console.log("- Compliance: expects missed visits + some completed without notes.");
-  console.log("- Visit Map: managers; geocoded clients in SN* postcodes.");
+  console.log(`- Payroll UI: generate timesheet for ${rangeStart.toISOString().slice(0, 10)} → ${rangeEnd.toISOString().slice(0, 10)}.`);
+  console.log("- Compliance: expects missed visits + completed visits without care notes.");
+  console.log("- Visit Map: managers; geocoded clients in SN* postcodes, GPS actuals on completed.");
+  console.log("- Rota: view any week within the date range to see dense scheduled/completed slots.");
+}
+
+function pct(n: number, total: number): string {
+  if (total === 0) return "0";
+  return Math.round((n / total) * 100).toString();
 }
 
 main().catch((e) => {

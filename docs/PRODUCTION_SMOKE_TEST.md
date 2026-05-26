@@ -19,20 +19,29 @@ Run `npm run seed:swindon-demo` (with `ALLOW_DEMO_SEED=true`) before testing dem
 | Agency | Swindon Community Care Demo |
 | Clients | 40 |
 | Carers | 30 |
-| Visits | 168 |
+| Visits | ~868 (rolling 31 days: today−14 → today+16) |
 | Funder | Swindon Demo LA |
 
 **After reseeding:** sign out then sign back in. The seed bumps the demo membership's `created_at` to `now()` so `getCurrentAgencyId()` resolves to Swindon on the next login. There is no agency switcher UI — resolution is deterministic via newest `created_at`.
 
+**Suggested test date ranges:**
+
+| Test scope | Date range |
+|-----------|-----------|
+| Full rolling month (payroll/billing) | today−14 → today+16 |
+| Past fortnight | today−14 → yesterday |
+| Current week | today−3 → today+3 |
+| Future fortnight (rota) | tomorrow → today+14 |
+
 **Expected smoke path:**
 
 - [ ] Dashboard shows Swindon agency name and visit counts
-- [ ] Visits page: 168 visits, mixed statuses
+- [ ] Visits page: ~868 visits, mixed statuses (completed/missed/scheduled/in_progress)
 - [ ] Care plans: open any client → Care Plan tab — sections present
-- [ ] Visit notes: some visits have notes; gaps visible for compliance
-- [ ] Visit map: pins in SN* postcode area with GPS actuals
-- [ ] Compliance: missed visits and notes-gap flags visible
-- [ ] Payroll: generate CSV for 14-day window — downloads successfully
+- [ ] Visit notes: most completed visits have notes; ~8% no-notes cohort visible for compliance
+- [ ] Visit map: pins in SN* postcode area with GPS actuals on completed visits
+- [ ] Compliance: missed visits (~7%) and notes-gap flags (~8% no-notes) visible
+- [ ] Payroll: generate CSV for rolling 31-day window (today−14 → today+16) — downloads successfully
 - [ ] Billing: `/billing/summary` loads without errors
 
 ---
