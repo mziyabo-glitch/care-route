@@ -36,6 +36,23 @@ Run `npm run seed:swindon-demo` (with `ALLOW_DEMO_SEED=true`) before testing dem
 **Expected smoke path:**
 
 - [ ] Dashboard shows Swindon agency name and visit counts
+
+---
+
+## Care Control Centre (dashboard)
+
+Sign in as **manager+** on `/dashboard` after demo seed. Use UK daytime where possible so call-window panels populate.
+
+- [ ] **Hero:** Agency name prominent (e.g. Swindon Community Care Demo); greeting uses your **name** from auth metadata (`full_name`, `first_name`/`last_name`) — not raw email unless no name is set
+- [ ] **Today's safety status:** Visit counts for today only; completed / still to deliver / late / missed / notes outstanding are internally consistent
+- [ ] **Needs action:** Shows prioritised items when seed has missed, late, open check-in, or missing notes; empty state when none
+- [ ] **Happening now / Up next:** Only visits in morning, lunch, tea, or bedtime call windows; no duplicate rows across both panels
+- [ ] **Rota capacity:** Active carers, on-rota count, double-up count plausible for today
+- [ ] **Compliance pulse:** Tracked tiles match safety counts; deferred tiles show "Not tracked yet" (care plan review, training, safeguarding)
+- [ ] **Payroll & billing snapshot** (manager+): Billable minutes load; **owner/admin** also see worked hours (checked-in/completed only — not future scheduled slots)
+- [ ] **Viewer role:** Payroll/billing snapshot and visit map preview **hidden**; compliance tracked tiles hidden (`tracked: false`)
+- [ ] **Overnight / between calls:** Happening now and Up next may be empty — acceptable; safety status still shows today's totals
+- [ ] **Quick links:** Clients, Carers, Visits, Rota navigate correctly
 - [ ] Visits page: ~868 visits, mixed statuses (completed/missed/scheduled/in_progress)
 - [ ] Care plans: open any client → Care Plan tab — sections present
 - [ ] Visit notes: most completed visits have notes; ~8% no-notes cohort visible for compliance

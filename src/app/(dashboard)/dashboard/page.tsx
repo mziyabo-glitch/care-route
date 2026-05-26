@@ -18,7 +18,10 @@ export default async function DashboardPage() {
   const { role } = await getCurrentRole();
 
   const data = await loadDashboardData(supabase, agencyId, {
-    userEmail: user.email,
+    user: {
+      email: user.email,
+      user_metadata: user.user_metadata as Record<string, unknown>,
+    },
     role,
   });
 

@@ -7,13 +7,23 @@ import {
 import {
   formatDashboardMinutes,
   type DashboardData,
+  type DashboardActionItem,
 } from "@/lib/dashboard-data";
 
-function StatusBadge({
-  status,
-}: {
-  status: string;
-}) {
+const CARE_STATUS_LABELS: Record<string, string> = {
+  missed: "Missed visit",
+  late: "Late — not checked in",
+  in_progress: "In progress",
+  completed: "Completed",
+  scheduled: "Scheduled",
+  due_soon: "Due soon",
+};
+
+function careStatusLabel(status: string): string {
+  return CARE_STATUS_LABELS[status] ?? displayStatusLabel(status as Parameters<typeof displayStatusLabel>[0]);
+}
+
+function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     missed: "bg-red-50 text-red-800 ring-red-200",
     late: "bg-amber-50 text-amber-900 ring-amber-200",
@@ -22,13 +32,12 @@ function StatusBadge({
     scheduled: "bg-blue-50 text-blue-800 ring-blue-200",
     due_soon: "bg-cyan-50 text-cyan-800 ring-cyan-200",
   };
-  const cls =
-    styles[status] ?? "bg-slate-50 text-slate-700 ring-slate-200";
+  const cls = styles[status] ?? "bg-slate-50 text-slate-700 ring-slate-200";
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${cls}`}
+      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${cls}`}
     >
-      {displayStatusLabel(status as Parameters<typeof displayStatusLabel>[0])}
+      {careStatusLabel(status)}
     </span>
   );
 }
@@ -70,19 +79,41 @@ function Section({
   subtitle,
   children,
   action,
+  variant = "default",
 }: {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
   action?: React.ReactNode;
+  variant?: "default" | "urgent";
 }) {
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-2">
+    <section
+      className={
+        variant === "urgent"
+          ? "rounded-2xl border border-amber-200 bg-amber-50/40 p-4 sm:p-5"
+          : "space-y-4"
+      }
+    >
+      <div
+        className={`flex flex-wrap items-end justify-between gap-2 ${variant === "urgent" ? "mb-4" : ""}`}
+      >
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+          <h2
+            className={
+              variant === "urgent"
+                ? "text-lg font-semibold text-amber-950"
+                : "text-lg font-semibold text-slate-900"
+            }
+          >
+            {title}
+          </h2>
           {subtitle ? (
-            <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p>
+            <p
+              className={`mt-0.5 text-sm ${variant === "urgent" ? "text-amber-900/80" : "text-slate-600"}`}
+            >
+              {subtitle}
+            </p>
           ) : null}
         </div>
         {action}
@@ -100,23 +131,53 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+function actionAccent(priority: number): string {
+  if (priority <= 1) return "border-l-red-600";
+  if (priority <= 2) return "border-l-amber-500";
+  return "border-l-slate-300";
+}
+
+function ActionReasonBadge({ reason }: { reason: string }) {
+  const urgent =
+    reason.toLowerCase().includes("missed") ||
+    reason.toLowerCase().includes("late");
+  return (
+    <span
+      className={`inline-flex max-w-[12rem] rounded-md px-2 py-1 text-xs font-semibold leading-snug sm:max-w-none ${
+        urgent
+          ? "bg-red-100 text-red-900"
+          : "bg-amber-100 text-amber-950"
+      }`}
+    >
+      {reason}
+    </span>
+  );
+}
+
 export function DashboardView({ data }: { data: DashboardData }) {
   const { safety } = data;
+  const hasNeedsAction = data.needsAction.length > 0;
 
   return (
-    <div className="space-y-10 pb-10">
+    <div className="space-y-8 pb-10 sm:space-y-10">
       {/* Hero */}
-      <header className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-teal-900 px-6 py-8 text-white shadow-md sm:px-8">
-        <div className="relative z-10 max-w-2xl space-y-3">
-          <p className="text-sm font-medium text-teal-200/90">
+      <header className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-teal-900 px-5 py-7 text-white shadow-md sm:px-8 sm:py-9">
+        <div className="relative z-10 max-w-3xl space-y-2 sm:space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-teal-200/90 sm:text-sm">
             Care Control Centre
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Good {hourGreeting()}, {data.greetingName}
+          <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">
+            {data.agencyName}
           </h1>
-          <p className="text-lg text-slate-200">{data.agencyName}</p>
+          <p className="text-base text-slate-100 sm:text-lg">
+            Good {hourGreeting()}, {data.greetingName}
+          </p>
           <p className="text-sm text-slate-300">{data.todayFormatted}</p>
-          <p className="text-sm font-medium text-white/90">
+          <p
+            className={`text-sm font-medium sm:text-base ${
+              hasNeedsAction ? "text-amber-200" : "text-teal-100"
+            }`}
+          >
             {data.operationalLine}
           </p>
         </div>
@@ -126,22 +187,24 @@ export function DashboardView({ data }: { data: DashboardData }) {
         />
       </header>
 
-      {/* Today's Safety Status */}
+      {/* Today's safety status */}
       <Section
         title="Today's safety status"
-        subtitle="Operational picture for today's rota (Europe/London)."
+        subtitle="Live operational picture for today's rota (UK time)."
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <StatCard label="Visits today" value={safety.visitsToday} />
           <StatCard label="Completed" value={safety.completed} tone="ok" />
           <StatCard
-            label="Upcoming / in progress"
+            label="Still to deliver"
             value={safety.upcomingOrInProgress}
+            hint="Scheduled, due, in progress, or late"
           />
           <StatCard
             label="Late"
             value={safety.late}
             tone={safety.late > 0 ? "warn" : "default"}
+            hint="Past start, no check-in"
           />
           <StatCard
             label="Missed"
@@ -149,117 +212,97 @@ export function DashboardView({ data }: { data: DashboardData }) {
             tone={safety.missed > 0 ? "danger" : "default"}
           />
           <StatCard
-            label="No care notes"
+            label="Notes outstanding"
             value={safety.completedWithoutNotes}
             tone={safety.completedWithoutNotes > 0 ? "warn" : "default"}
-            hint="Completed or checked out"
+            hint="Finished visits without a care note"
           />
         </div>
       </Section>
 
-      {/* Needs Action */}
+      {/* Needs action */}
       <Section
         title="Needs action"
-        subtitle="Prioritised: missed, late, checked-in without checkout, missing notes, double-up gaps."
+        subtitle="Prioritised follow-up: missed and late visits, open check-ins, missing notes, double-up gaps."
+        variant={hasNeedsAction ? "urgent" : "default"}
         action={
           <Link
             href="/compliance"
             className="text-sm font-medium text-teal-700 hover:text-teal-800"
           >
-            Compliance →
+            Open compliance →
           </Link>
         }
       >
-        {data.needsAction.length === 0 ? (
-          <EmptyState message="Nothing flagged for urgent follow-up right now." />
+        {!hasNeedsAction ? (
+          <EmptyState message="No urgent follow-up items for today's rota." />
         ) : (
           <ul className="space-y-3">
             {data.needsAction.map((item) => (
               <li key={item.id}>
-                <Link
-                  href={item.href}
-                  className="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-900">
-                        {item.clientName}
-                      </p>
-                      <p className="mt-0.5 text-sm text-slate-600">
-                        {formatUkTime(item.startTime)} –{" "}
-                        {formatUkTime(item.endTime)}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-700">
-                        {item.taskLabel}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {item.carerNames.length > 0
-                          ? item.carerNames.join(" · ")
-                          : "Unassigned"}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className="text-xs font-medium text-amber-800">
-                        {item.reason}
-                      </span>
-                      <StatusBadge status={item.displayStatus} />
-                    </div>
-                  </div>
-                </Link>
+                <ActionCard item={item} />
               </li>
             ))}
           </ul>
         )}
       </Section>
 
-      {/* Happening Now / Next */}
-      <div className="grid gap-8 lg:grid-cols-2">
-        <Section title="Happening now" subtitle="In progress or due within the hour.">
+      {/* Happening now / Up next */}
+      <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
+        <Section
+          title="Happening now"
+          subtitle="In progress, late, or due within the hour — morning, lunch, tea, or bedtime calls only."
+        >
           {data.happeningNow.length === 0 ? (
-            <EmptyState message="No visits in progress or imminently due." />
+            <EmptyState message="No active visits in the current call windows." />
           ) : (
             <TimelineList items={data.happeningNow} />
           )}
         </Section>
-        <Section title="Up next" subtitle="Scheduled visits later today.">
+        <Section
+          title="Up next"
+          subtitle="Later today within a call window — not yet started."
+        >
           {data.upNext.length === 0 ? (
-            <EmptyState message="No further visits scheduled for today." />
+            <EmptyState message="No further visits in today's call windows." />
           ) : (
             <TimelineList items={data.upNext} />
           )}
         </Section>
       </div>
 
-      {/* Rota Capacity */}
+      {/* Rota capacity */}
       <Section
         title="Rota capacity"
-        subtitle="Carers assigned to at least one visit today."
+        subtitle="Carers with at least one visit scheduled today."
       >
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Active carers" value={data.rotaCapacity.totalCarers} />
           <StatCard
-            label="Active carers"
-            value={data.rotaCapacity.totalCarers}
-          />
-          <StatCard
-            label="Assigned today"
+            label="On today's rota"
             value={data.rotaCapacity.assignedToday}
           />
-          <StatCard label="Spare capacity" value={data.rotaCapacity.spare} />
+          <StatCard
+            label="Unassigned today"
+            value={data.rotaCapacity.spare}
+            hint="Active carers with no visit today"
+          />
           <StatCard
             label="Double-up visits"
             value={data.rotaCapacity.doubleUpCount}
+            hint="Joint or two-carer calls today"
           />
         </div>
         {data.rotaCapacity.busiestCarers.length > 0 ? (
           <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Busiest carers today
+              Busiest on today's rota
             </p>
-            <ul className="mt-2 space-y-1">
+            <ul className="mt-2 divide-y divide-slate-100">
               {data.rotaCapacity.busiestCarers.map((c) => (
                 <li
                   key={c.name}
-                  className="flex justify-between text-sm text-slate-700"
+                  className="flex justify-between py-2 text-sm text-slate-700 first:pt-0 last:pb-0"
                 >
                   <span>{c.name}</span>
                   <span className="tabular-nums text-slate-500">
@@ -280,10 +323,10 @@ export function DashboardView({ data }: { data: DashboardData }) {
         </p>
       </Section>
 
-      {/* Compliance Pulse */}
+      {/* Compliance pulse */}
       <Section
         title="Compliance pulse"
-        subtitle="Signals your agency already tracks — no placeholder metrics."
+        subtitle="Signals from today's visits — no placeholder KPIs."
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.compliancePulse.map((m) => (
@@ -297,14 +340,16 @@ export function DashboardView({ data }: { data: DashboardData }) {
                   {m.value ?? 0}
                 </p>
               ) : (
-                <p className="mt-2 text-sm text-slate-500">Not tracked yet</p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Not tracked yet — planned in a future release
+                </p>
               )}
               {m.href && m.tracked ? (
                 <Link
                   href={m.href}
                   className="mt-2 inline-block text-xs font-medium text-teal-700 hover:text-teal-800"
                 >
-                  View details
+                  View details →
                 </Link>
               ) : null}
             </div>
@@ -312,11 +357,11 @@ export function DashboardView({ data }: { data: DashboardData }) {
         </div>
       </Section>
 
-      {/* Payroll / Billing */}
+      {/* Payroll / billing */}
       {data.payrollBilling.visible ? (
         <Section
           title="Payroll & billing snapshot"
-          subtitle="Today only — same rules as timesheet generation and visit billing views."
+          subtitle="Today only — completed hours and billable time; payroll reflects checked-in work, not future slots."
         >
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -330,10 +375,13 @@ export function DashboardView({ data }: { data: DashboardData }) {
             {data.payrollBilling.payrollVisible ? (
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                  Payroll hours (today)
+                  Worked hours (today)
                 </p>
                 <p className="mt-1 text-xl font-semibold text-slate-900">
                   {formatDashboardMinutes(data.payrollBilling.payrollMinutes)}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Completed and checked-in visits only
                 </p>
               </div>
             ) : null}
@@ -373,11 +421,11 @@ export function DashboardView({ data }: { data: DashboardData }) {
         </Section>
       ) : null}
 
-      {/* Visit Map Preview */}
+      {/* Visit map preview */}
       {data.visitMapPreview.visible ? (
         <Section
           title="Visit map preview"
-          subtitle={`${data.visitMapPreview.geocodedCount} geocoded of ${data.safety.visitsToday} visits today.`}
+          subtitle={`${data.visitMapPreview.geocodedCount} of ${safety.visitsToday} visits today have map coordinates.`}
           action={
             <Link
               href={`/visit-map?date=${data.todayDate}`}
@@ -387,7 +435,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
             </Link>
           }
         >
-          <div className="mb-3 flex flex-wrap gap-3 text-sm text-slate-600">
+          <div className="mb-3 flex flex-wrap gap-4 text-sm text-slate-600">
             <span>
               <span
                 className="mr-1.5 inline-block h-2 w-2 rounded-full bg-amber-500"
@@ -404,7 +452,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
             </span>
           </div>
           {data.visitMapPreview.rows.length === 0 ? (
-            <EmptyState message="No visits scheduled for today." />
+            <EmptyState message="No visits on today's rota." />
           ) : (
             <ul className="space-y-2">
               {data.visitMapPreview.rows.map((v) => (
@@ -430,7 +478,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
                     <span
                       className="h-2.5 w-2.5 rounded-full"
                       style={{ backgroundColor: pinColor(v.display_status) }}
-                      title={displayStatusLabel(v.display_status)}
+                      title={careStatusLabel(v.display_status)}
                       aria-hidden
                     />
                     <StatusBadge status={v.display_status} />
@@ -466,6 +514,34 @@ export function DashboardView({ data }: { data: DashboardData }) {
   );
 }
 
+function ActionCard({ item }: { item: DashboardActionItem }) {
+  return (
+    <Link
+      href={item.href}
+      className={`block rounded-xl border border-slate-200 border-l-4 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md ${actionAccent(item.priority)}`}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-slate-900">{item.clientName}</p>
+          <p className="mt-0.5 text-sm text-slate-600">
+            {formatUkTime(item.startTime)} – {formatUkTime(item.endTime)}
+          </p>
+          <p className="mt-1 text-sm text-slate-700">{item.taskLabel}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {item.carerNames.length > 0
+              ? item.carerNames.join(" · ")
+              : "Unassigned"}
+          </p>
+        </div>
+        <div className="flex flex-row flex-wrap items-center gap-2 sm:flex-col sm:items-end">
+          <ActionReasonBadge reason={item.reason} />
+          <StatusBadge status={item.displayStatus} />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 function hourGreeting(): string {
   const h = Number(
     new Date().toLocaleString("en-GB", {
@@ -492,10 +568,13 @@ function TimelineList({
           className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
         >
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
+            <div className="min-w-0">
               <p className="font-semibold text-slate-900">{item.clientName}</p>
               <p className="text-sm text-slate-600">
-                {formatUkTime(item.startTime)} ·{" "}
+                {formatUkTime(item.startTime)}
+                {item.callWindow ? ` · ${item.callWindow} call` : ""}
+              </p>
+              <p className="text-sm text-slate-500">
                 {item.carerNames.join(" · ") || "Unassigned"}
               </p>
               <p className="mt-1 text-sm text-slate-700">{item.taskLabel}</p>

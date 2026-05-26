@@ -56,7 +56,7 @@ One row per visit (highest priority reason wins).
 | Metric | Definition | Data source | Implemented |
 |--------|------------|-------------|-------------|
 | Completed hours | Sum of minutes for `status = completed` using actual check-in/out minus break, else planned duration | `visit_actuals` + visit times (same rules as `generate_timesheet`) | Yes |
-| Payroll hours | Sum for `completed`, `in_progress`, `scheduled` today with same minute rules | Same | Yes (admin/owner tile only) |
+| Worked hours (payroll snapshot) | Sum for `completed` plus `in_progress` with check-in today (actual or planned duration rules) — **excludes** future `scheduled` slots | Same | Yes (admin/owner tile only) |
 | Billable (today) | Sum of `billable_minutes` from billing view | `list_billing_for_range` RPC | Yes (manager+) |
 | Missed visits (today) | Missed count | Visit status | Yes |
 

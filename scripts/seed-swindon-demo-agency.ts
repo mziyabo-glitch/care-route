@@ -610,6 +610,14 @@ async function createVisitsAndActuals(
             status = "scheduled";
         }
 
+        // Today's in-progress visits: anchor near "now" so the dashboard Happening now panel is populated after seed.
+        if (dayOffset === 0 && cohort === "in_progress") {
+          const minutesAgo = 20 + Math.floor(prng(seed + 99) * 25);
+          const checkInAnchor = new Date(Date.now() - minutesAgo * 60 * 1000);
+          startTime.setTime(checkInAnchor.getTime() - 3 * 60 * 1000);
+          endTime.setTime(startTime.getTime() + durationMin * 60 * 1000);
+        }
+
         const note =
           `${DEMO_TAG} day=${dayOffset} win=${win.name} slot=${slot} type=${visitType}${doubleUpNote}`;
 

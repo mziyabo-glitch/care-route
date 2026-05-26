@@ -46,6 +46,7 @@ export type DashboardTimelineItem = {
   startTime: string;
   endTime: string;
   taskLabel: string;
+  callWindow: string | null;
   isDoubleUp: boolean;
   displayStatus: VisitMapDisplayStatus;
   status: string;
@@ -63,6 +64,7 @@ export type DashboardPayrollBilling = {
   visible: boolean;
   payrollVisible: boolean;
   completedMinutes: number;
+  /** Checked-in work today (completed + in progress with actuals) — not planned future slots. */
   payrollMinutes: number;
   billableMinutes: number;
   missedVisits: number;
@@ -103,12 +105,71 @@ export type DashboardData = {
   };
 };
 
-function greetingFromEmail(email: string | undefined): string {
-  if (!email) return "there";
-  const local = email.split("@")[0] ?? "";
+/** UK domiciliary call windows (minutes from midnight, Europe/London). */
+const UK_CALL_WINDOWS = [
+  { name: "Morning", startMin: 7 * 60, endMin: 10 * 60 + 30 },
+  { name: "Lunch", startMin: 11 * 60 + 30, endMin: 14 * 60 },
+  { name: "Tea", startMin: 15 * 60 + 30, endMin: 18 * 60 + 30 },
+  { name: "Bedtime", startMin: 19 * 60, endMin: 22 * 60 + 30 },
+] as const;
+
+function metaString(
+  meta: Record<string, unknown>,
+  ...keys: string[]
+): string | null {
+  for (const key of keys) {
+    const v = meta[key];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+/** First name for greeting; full name when both parts known. Falls back to email local-part only. */
+export function resolveUserGreetingName(user: {
+  email?: string | null;
+  user_metadata?: Record<string, unknown>;
+}): string {
+  const meta = user.user_metadata ?? {};
+  const first = metaString(meta, "first_name", "given_name");
+  const last = metaString(meta, "last_name", "family_name");
+  const full = metaString(meta, "full_name", "name");
+
+  if (first && last) return `${first} ${last}`;
+  if (first) return first;
+  if (full) {
+    const parts = full.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return `${parts[0]} ${parts[parts.length - 1]}`;
+    return full;
+  }
+  if (!user.email) return "there";
+  const local = user.email.split("@")[0] ?? "";
   const bit = local.split(/[.+_-]/)[0];
   if (!bit) return "there";
   return bit.charAt(0).toUpperCase() + bit.slice(1).toLowerCase();
+}
+
+function londonMinutesFromMidnight(iso: string): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).formatToParts(new Date(iso));
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+  return hour * 60 + minute;
+}
+
+function callWindowForStart(startTime: string): string | null {
+  const min = londonMinutesFromMidnight(startTime);
+  for (const w of UK_CALL_WINDOWS) {
+    if (min >= w.startMin && min < w.endMin) return w.name;
+  }
+  return null;
+}
+
+function visitInCallWindow(startTime: string): boolean {
+  return callWindowForStart(startTime) != null;
 }
 
 function taskLabelFromNotes(notes: string | null | undefined): string {
@@ -171,7 +232,10 @@ export async function loadDashboardData(
   supabase: SupabaseClient,
   agencyId: string,
   options: {
-    userEmail?: string;
+    user?: {
+      email?: string | null;
+      user_metadata?: Record<string, unknown>;
+    };
     role: Role | null;
   }
 ): Promise<DashboardData> {
@@ -271,7 +335,7 @@ export async function loadDashboardData(
     }
     if (ds === "late") late += 1;
     if (ds === "missed") missed += 1;
-    if (v.missing_care_note && ds === "completed") completedWithoutNotes += 1;
+    if (v.missing_care_note) completedWithoutNotes += 1;
 
     v.carer_ids.forEach((id, i) => {
       assignedCarerIds.add(id);
@@ -280,19 +344,22 @@ export async function loadDashboardData(
       carerVisitCounts.set(id, (carerVisitCounts.get(id) ?? 0) + 1);
     });
 
+    const actual = actualsByVisit[v.id];
     if (v.status === "completed") {
-      const actual = actualsByVisit[v.id];
       completedMinutes += payrollMinutesForVisit(
         v.start_time,
         v.end_time,
         actual
       );
     }
-    if (["completed", "in_progress", "scheduled"].includes(v.status)) {
+    if (
+      v.status === "completed" ||
+      (v.status === "in_progress" && actual?.check_in_at)
+    ) {
       payrollMinutes += payrollMinutesForVisit(
         v.start_time,
         v.end_time,
-        actualsByVisit[v.id]
+        actual
       );
     }
   }
@@ -361,11 +428,14 @@ export async function loadDashboardData(
         reason: "Checked in — not checked out",
       });
     }
-    if (missingNoteIds.has(v.id) || v.missing_care_note) {
+    if (
+      (missingNoteIds.has(v.id) || v.missing_care_note) &&
+      (v.status === "completed" || v.check_out_at)
+    ) {
       considerAction({
         ...base,
         priority: actionPriority("no_notes"),
-        reason: "Completed without care note",
+        reason: "Care note missing after visit",
       });
     }
     if (raw?.missing_second_carer) {
@@ -392,19 +462,29 @@ export async function loadDashboardData(
       startTime: v.start_time,
       endTime: v.end_time,
       taskLabel: taskLabelFromNotes(raw?.notes),
+      callWindow: callWindowForStart(v.start_time),
       isDoubleUp: !!raw?.is_joint || !!raw?.requires_double_up,
       displayStatus: v.display_status,
       status: v.status,
     };
   };
 
+  const isHappeningNow = (v: VisitMapRow) => {
+    if (v.display_status === "in_progress" || v.display_status === "late") {
+      return visitInCallWindow(v.start_time);
+    }
+    if (v.display_status === "due_soon") {
+      const startMs = new Date(v.start_time).getTime();
+      return (
+        visitInCallWindow(v.start_time) &&
+        startMs <= now.getTime() + 60 * 60 * 1000
+      );
+    }
+    return false;
+  };
+
   const happeningNow = visitRows
-    .filter(
-      (v) =>
-        v.display_status === "in_progress" ||
-        (v.display_status === "due_soon" &&
-          new Date(v.start_time).getTime() <= now.getTime() + 60 * 60 * 1000)
-    )
+    .filter(isHappeningNow)
     .sort(
       (a, b) =>
         new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
@@ -412,11 +492,15 @@ export async function loadDashboardData(
     .slice(0, 6)
     .map(timelineFromRow);
 
+  const happeningIds = new Set(happeningNow.map((h) => h.id));
+
   const upNext = visitRows
     .filter(
       (v) =>
+        !happeningIds.has(v.id) &&
         (v.display_status === "scheduled" || v.display_status === "due_soon") &&
-        new Date(v.start_time).getTime() > now.getTime()
+        new Date(v.start_time).getTime() > now.getTime() &&
+        visitInCallWindow(v.start_time)
     )
     .sort(
       (a, b) =>
@@ -507,7 +591,7 @@ export async function loadDashboardData(
 
   return {
     agencyName,
-    greetingName: greetingFromEmail(options.userEmail),
+    greetingName: resolveUserGreetingName(options.user ?? {}),
     todayDate: today,
     todayFormatted: new Date(`${today}T12:00:00Z`).toLocaleDateString("en-GB", {
       timeZone: "Europe/London",
