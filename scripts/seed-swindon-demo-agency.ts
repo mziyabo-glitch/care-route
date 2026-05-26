@@ -112,16 +112,14 @@ async function ensureMembership(
     .maybeSingle();
 
   if (hit?.id) {
-    const role = (hit as { role?: string }).role ?? "owner";
-    if (role !== "owner") {
-      const { error: roleErr } = await client
-        .from("agency_members")
-        .update({ role: "owner" })
-        .eq("id", hit.id as string);
-      if (roleErr) throw roleErr;
-      return { role: "owner", created: false };
-    }
-    return { role, created: false };
+    // Always bump created_at to now() so this membership sorts first (newest DESC)
+    // and getCurrentAgencyId() resolves to the demo agency on next login.
+    const { error: bumpErr } = await client
+      .from("agency_members")
+      .update({ role: "owner", created_at: new Date().toISOString() })
+      .eq("id", hit.id as string);
+    if (bumpErr) throw bumpErr;
+    return { role: "owner", created: false };
   }
 
   const { error } = await client.from("agency_members").insert({
@@ -745,7 +743,12 @@ async function main() {
     }
   }
 
+  console.log(
+    `\nAfter seed, getCurrentAgencyId() will resolve to: ${bootstrap.resolvedAgencyId === bootstrap.agencyId ? bootstrap.agencyName : `OTHER — ${bootstrap.resolvedAgencyId} (NOT the demo agency — rerun seed)`}`
+  );
+
   console.log("\nManual steps:");
+  console.log("- Sign out then sign back in to pick up the refreshed membership timestamp.");
   console.log("- Log into the app as the account with DEMO_SEED_OWNER_USER_ID.");
   console.log("- Payroll UI: generate timesheet for UTC date range overlapping next 14 days.");
   console.log("- Compliance: expects missed visits + some completed without notes.");

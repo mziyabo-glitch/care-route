@@ -34,14 +34,28 @@ npm run seed:swindon-demo
 
 Re-running is safe: carers/clients/plans are reused; demo-tagged visits are replaced.
 
+## Agency resolution — no switcher
+
+The app has **no visible agency switcher**. `getCurrentAgencyId()` always picks the `agency_members` row with the **newest `created_at` DESC**. The seed script bumps the demo membership's `created_at` to `now()` on every run, so the demo agency is always the winner after a fresh seed.
+
+**If the wrong agency loads after login:**
+
+1. Rerun the seed (`npm run seed:swindon-demo`) — it will bump `created_at` to now and print the resolved agency name.
+2. Sign out, then sign back in. The server reads the freshest membership on each request.
+
+An agency switcher UI is **deferred** — resolution is deterministic via `created_at` order.
+
 ## After seeding
 
 1. Log in with the account matching `DEMO_SEED_OWNER_USER_ID`.
-2. If you belong to multiple agencies (e.g. Pro Health + Swindon demo on the same user), the app uses the **newest** `agency_members.created_at` only — there is no agency switcher UI. To demo Swindon specifically, ensure that membership is newest or use a user with only the demo agency. See [`docs/AGENCY_SWITCHER.md`](AGENCY_SWITCHER.md) (removed).
-3. **Smoke:** with Swindon as the resolved agency — expect ~40 clients, 30 carers, 168 visits on dashboard/clients/carers/visits.
-4. **Payroll:** open Payroll and generate a timesheet for a UTC range covering the next 14 days (RPC requires your logged-in admin/owner session).
-5. **Compliance:** `/compliance` — missed visits + completed visits without care notes.
-6. **Visit map:** `/visit-map` — geocoded Swindon postcodes and GPS check-in/out on completed visits.
+2. The resolved agency will be **Swindon Community Care Demo** — confirmed in the seed summary line `After seed, getCurrentAgencyId() will resolve to: …`.
+3. **Sign out / sign in** after reseeding so the server session picks up the refreshed membership.
+4. **Smoke:** expect **40 clients, 30 carers, 168 visits** on Dashboard / Clients / Carers / Visits.
+5. **Payroll:** open Payroll and generate a timesheet for a UTC range covering the next 14 days (RPC requires owner/admin session).
+6. **Compliance:** `/compliance` — missed visits + completed visits without care notes.
+7. **Visit map:** `/visit-map` — geocoded Swindon postcodes and GPS check-in/out on completed visits.
+8. **Billing:** `/billing` and `/billing/summary` — Swindon Demo LA funder with rates.
+9. **Care plans:** open any client → Care Plan tab — 5 default sections per plan.
 
 ## What gets created
 

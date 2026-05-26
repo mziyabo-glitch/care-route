@@ -10,6 +10,33 @@ Deploy steps: [`docs/DEPLOY_AND_SMOKE.md`](DEPLOY_AND_SMOKE.md).
 
 ---
 
+## Demo seed — expected state
+
+Run `npm run seed:swindon-demo` (with `ALLOW_DEMO_SEED=true`) before testing demo flows.
+
+| Check | Expected |
+|-------|----------|
+| Agency | Swindon Community Care Demo |
+| Clients | 40 |
+| Carers | 30 |
+| Visits | 168 |
+| Funder | Swindon Demo LA |
+
+**After reseeding:** sign out then sign back in. The seed bumps the demo membership's `created_at` to `now()` so `getCurrentAgencyId()` resolves to Swindon on the next login. There is no agency switcher UI — resolution is deterministic via newest `created_at`.
+
+**Expected smoke path:**
+
+- [ ] Dashboard shows Swindon agency name and visit counts
+- [ ] Visits page: 168 visits, mixed statuses
+- [ ] Care plans: open any client → Care Plan tab — sections present
+- [ ] Visit notes: some visits have notes; gaps visible for compliance
+- [ ] Visit map: pins in SN* postcode area with GPS actuals
+- [ ] Compliance: missed visits and notes-gap flags visible
+- [ ] Payroll: generate CSV for 14-day window — downloads successfully
+- [ ] Billing: `/billing/summary` loads without errors
+
+---
+
 ## Auth and routing
 
 - [ ] `/` redirects to `/login`
