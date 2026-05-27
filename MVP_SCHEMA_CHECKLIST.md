@@ -65,15 +65,20 @@ Apply order: [`supabase/scripts/RUN_MIGRATIONS.md`](supabase/scripts/RUN_MIGRATI
 ### Care plans
 
 - [ ] Tables `care_plans`, `care_plan_sections` + RLS (migration `20260227000000_care_plans.sql`)
+- [ ] Archived plans enforce read-only updates at API level (`PATCH /api/clients/[id]/care-plan`, section PATCH/DELETE/POST paths)
+- [ ] Default section templates include `mobility` and `nutrition_hydration`
 
 ### Visit care notes
 
 - [ ] Table `visit_care_notes` (migration `20260227100000_visit_care_notes.sql`)
+- [ ] `list_agency_members` author enrichment works (email/label rendered in notes UI)
+- [ ] `note_type` supports and displays safeguarding/risk tags safely
 
 ### Visit map
 
 - [ ] `clients.latitude` / `longitude` / `geocoded_at`; optional GPS on `visit_actuals`
 - [ ] `GET /api/visit-map` returns 200 for manager+
+- [ ] “Only show issues” filter works (late, missed, missing notes)
 
 ---
 

@@ -64,9 +64,11 @@ Production smoke used **Swindon Community Care Demo** seeded agency data (dashbo
 
 ## C. Care planning polish
 
-- **C1** Care plan link from visits (modal + visit row → `/clients/[id]/care-plan`)
-- **C2** Default section templates on plan create (API POST)
-- **C3** Archive plan button + confirm; show create state after archive
-- **C4** Visit care notes modal: filter (all / general / handover / clinical / untagged) + author display
-- **C5** Docs updated (`CARE_PLANNING_MVP.md`, `MVP_SCHEMA_CHECKLIST.md`, `TODO.md`)
+- **C1** Care plan links from visits + client list polished (`View care plan` in visit row, visit details, care notes modal, client list)
+- **C2** Default section templates extended (Mobility, Nutrition / Hydration) for new plan creation API
+- **C3** Archive flow hardened: archived plan read-only in API + UI, archived plan history view, audit/history copy
+- **C4** Visit notes UX improved: note-type filter (including risk/safeguarding), newest-first, author display, highlighted risk/safeguarding notes
+- **C5** Operational visit UX: visit details modal timeline, scheduled vs actual durations, missing-note and GPS warnings, late/missed/double-up badges
+- **C6** Compliance + map UX: compliance deep-link to specific visit and quick “Add care note”; visit map “Only show issues” filter + expanded legend
+- **C7** Docs updated (`CARE_PLANNING_MVP.md`, `MVP_SCHEMA_CHECKLIST.md`, `TODO.md`)
 

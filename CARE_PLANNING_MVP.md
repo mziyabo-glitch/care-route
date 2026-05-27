@@ -20,6 +20,15 @@ Checklists: [`docs/checklists/README.md`](docs/checklists/README.md) · Schema m
 - [x] Phases 1–5 + visit map implemented in repo
 - [ ] Phases 1–5 + visit map verified on production (migrations + [`docs/PRODUCTION_SMOKE_TEST.md`](docs/PRODUCTION_SMOKE_TEST.md))
 
+### Section C polish (May 2026)
+
+- Navigation polish: `View care plan` links now available from visit row, visit detail modal, care notes modal, and client list.
+- Care plan templates: default sections now include **Mobility** and **Nutrition / Hydration** in addition to existing sections.
+- Archive flow: archived care plans are now explicitly read-only in API/UI, with archived plans retained and viewable for audit/history.
+- Visit notes UX: filtering by `note_type` is preserved and extended with `risk`/`safeguarding`, with visual highlighting for those note types.
+- Operations UX: visit detail timeline now surfaces scheduled vs actual timings, duration, missing-note warning, GPS mismatch warning, and reusable audit badges.
+- Compliance + map UX: compliance rows deep-link directly to target visit and support “Add care note”; visit map includes an “Only show issues” filter.
+
 **Stabilisation tracker:** [`TODO.md`](TODO.md) section A · Audit: [`docs/checklists/production-stabilisation-audit.md`](docs/checklists/production-stabilisation-audit.md)
 
 ---

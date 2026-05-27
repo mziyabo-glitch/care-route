@@ -42,6 +42,30 @@ function FitBounds({ visits }: { visits: VisitMapRow[] }) {
 
 const UK_CENTER: [number, number] = [54.5, -2.5];
 
+/** Spread overlapping pins in a small ring so dense areas remain readable. */
+function spreadPosition(
+  lat: number,
+  lng: number,
+  index: number,
+  total: number
+): [number, number] {
+  if (total <= 1) return [lat, lng];
+  const angle = (2 * Math.PI * index) / total;
+  const offset = 0.00035;
+  return [lat + Math.cos(angle) * offset, lng + Math.sin(angle) * offset];
+}
+
+function groupByLocation(visits: VisitMapRow[]): Map<string, VisitMapRow[]> {
+  const groups = new Map<string, VisitMapRow[]>();
+  for (const v of visits) {
+    const key = `${v.client_lat!.toFixed(5)},${v.client_lng!.toFixed(5)}`;
+    const list = groups.get(key) ?? [];
+    list.push(v);
+    groups.set(key, list);
+  }
+  return groups;
+}
+
 export function VisitMapLeaflet({
   visits,
   selectedId,
@@ -77,12 +101,19 @@ export function VisitMapLeaflet({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <FitBounds visits={visits} />
-        {visits.map((v) => {
+        {[...groupByLocation(visits).entries()].flatMap(([, group]) =>
+          group.map((v, index) => {
           const selected = v.id === selectedId;
+          const [lat, lng] = spreadPosition(
+            v.client_lat!,
+            v.client_lng!,
+            index,
+            group.length
+          );
           return (
             <Marker
               key={v.id}
-              position={[v.client_lat!, v.client_lng!]}
+              position={[lat, lng]}
               icon={circleIcon(pinColor(v.display_status), selected)}
               eventHandlers={{
                 click: () => onSelect(v.id),
@@ -106,7 +137,8 @@ export function VisitMapLeaflet({
               </Popup>
             </Marker>
           );
-        })}
+        })
+        )}
       </MapContainer>
     </div>
   );

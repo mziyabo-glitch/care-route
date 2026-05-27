@@ -2,11 +2,13 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { VisitAuditBadges } from "@/components/audit-badges";
 import { VisitCareNotesModal } from "./visit-care-notes-modal";
+import { VisitDetailPanel } from "./visit-detail-panel";
 
 function ElapsedTimer({ since }: { since: string }) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const iv = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(iv);
@@ -79,11 +81,19 @@ export function VisitsPageClient({
   userRole?: string | null;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const visitIdFromUrl = searchParams.get("visit");
+  const openNotesFromUrl = searchParams.get("open") === "care-notes";
+  const urlFocusVisit = useMemo(() => {
+    if (!visitIdFromUrl) return null;
+    return initialVisits.find((v) => v.id === visitIdFromUrl) ?? null;
+  }, [visitIdFromUrl, initialVisits]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editVisit, setEditVisit] = useState<Visit | null>(null);
   const [deleteVisit, setDeleteVisit] = useState<Visit | null>(null);
   const [adjustVisit, setAdjustVisit] = useState<Visit | null>(null);
   const [notesVisit, setNotesVisit] = useState<Visit | null>(null);
+  const [detailVisit, setDetailVisit] = useState<Visit | null>(null);
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [adjustLoading, setAdjustLoading] = useState(false);
   const [error, setError] = useState("");
@@ -93,6 +103,14 @@ export function VisitsPageClient({
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [dateFilter, setDateFilter] = useState("");
   const isManager = userRole === "owner" || userRole === "admin" || userRole === "manager";
+
+  const activeDetailVisit = detailVisit ?? urlFocusVisit;
+  const activeNotesVisit =
+    notesVisit ?? (openNotesFromUrl && urlFocusVisit ? urlFocusVisit : null);
+
+  function clearVisitUrlParams() {
+    if (visitIdFromUrl) router.replace("/visits");
+  }
 
   const uniqueDates = useMemo(() => {
     const dates = new Set(
@@ -488,9 +506,22 @@ export function VisitsPageClient({
                               Joint
                             </span>
                           )}
+                          <VisitAuditBadges
+                            flags={{
+                              missedVisit: v.status === "missed",
+                              doubleUpGap: missingSecond,
+                            }}
+                          />
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setError(""); setDetailVisit(v); }}
+                          className="text-xs font-medium text-slate-700 transition hover:text-slate-900"
+                        >
+                          Details
+                        </button>
                         {v.status === "scheduled" && (
                           <button
                             type="button"
@@ -549,7 +580,7 @@ export function VisitsPageClient({
                           href={`/clients/${v.client_id}/care-plan`}
                           className="text-xs font-medium text-indigo-600 transition hover:text-indigo-500"
                         >
-                          Care plan
+                          View care plan
                         </Link>
                         <button
                           type="button"
@@ -928,15 +959,42 @@ export function VisitsPageClient({
       {/* Adjust visit modal */}
       <VisitCareNotesModal
         visit={
-          notesVisit
+          activeNotesVisit
             ? {
-                id: notesVisit.id,
-                client_id: notesVisit.client_id,
-                client_name: notesVisit.client_name,
+                id: activeNotesVisit.id,
+                client_id: activeNotesVisit.client_id,
+                client_name: activeNotesVisit.client_name,
               }
             : null
         }
-        onClose={() => setNotesVisit(null)}
+        onClose={() => {
+          setNotesVisit(null);
+          clearVisitUrlParams();
+        }}
+      />
+      <VisitDetailPanel
+        visit={
+          activeDetailVisit
+            ? {
+                id: activeDetailVisit.id,
+                client_id: activeDetailVisit.client_id,
+                client_name: activeDetailVisit.client_name,
+                start_time: activeDetailVisit.start_time,
+                end_time: activeDetailVisit.end_time,
+                status: activeDetailVisit.status,
+                check_in_at: activeDetailVisit.check_in_at ?? null,
+                check_out_at: activeDetailVisit.check_out_at ?? null,
+                break_minutes: activeDetailVisit.break_minutes ?? null,
+              }
+            : null
+        }
+        onClose={() => {
+          setDetailVisit(null);
+          clearVisitUrlParams();
+        }}
+        onOpenNotes={() => {
+          if (activeDetailVisit) setNotesVisit(activeDetailVisit);
+        }}
       />
 
       {adjustVisit && (

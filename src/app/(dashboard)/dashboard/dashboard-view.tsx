@@ -296,7 +296,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
         {data.rotaCapacity.busiestCarers.length > 0 ? (
           <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Busiest on today's rota
+              Busiest on today&apos;s rota
             </p>
             <ul className="mt-2 divide-y divide-slate-100">
               {data.rotaCapacity.busiestCarers.map((c) => (

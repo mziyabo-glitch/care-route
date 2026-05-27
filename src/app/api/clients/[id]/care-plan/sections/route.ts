@@ -40,6 +40,9 @@ export async function POST(
   if (!plan) {
     return NextResponse.json({ error: "Care plan not found" }, { status: 404 });
   }
+  if (plan.status === "archived") {
+    return NextResponse.json({ error: "Archived care plans are read-only." }, { status: 403 });
+  }
 
   const title = typeof body.title === "string" ? body.title : "";
   const sectionBody = typeof body.body === "string" ? body.body : "";

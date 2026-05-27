@@ -144,7 +144,7 @@ export function CompliancePageClient({
                         {formatUkTime(v.start_time)}
                       </td>
                       <td className="px-4 py-2 text-right">
-                        <VisitLink />
+                        <VisitLink visitId={v.id} />
                       </td>
                     </tr>
                   ))}
@@ -184,7 +184,14 @@ export function CompliancePageClient({
                         {statusLabel(v.status)}
                       </td>
                       <td className="px-4 py-2 text-right">
-                        <VisitLink label="Care notes" />
+                        <div className="flex justify-end gap-3">
+                          <VisitLink visitId={v.id} />
+                          <VisitLink
+                            visitId={v.id}
+                            label="Add care note"
+                            careNotes
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -228,10 +235,21 @@ function ComplianceSection({
   );
 }
 
-function VisitLink({ label = "View visit" }: { label?: string }) {
+function VisitLink({
+  visitId,
+  label = "View visit",
+  careNotes = false,
+}: {
+  visitId: string;
+  label?: string;
+  careNotes?: boolean;
+}) {
+  const href = careNotes
+    ? `/visits?visit=${encodeURIComponent(visitId)}&open=care-notes`
+    : `/visits?visit=${encodeURIComponent(visitId)}`;
   return (
     <Link
-      href="/visits"
+      href={href}
       className="text-sm font-medium text-blue-600 hover:text-blue-800"
     >
       {label}

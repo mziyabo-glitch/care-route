@@ -35,7 +35,9 @@ export const DEFAULT_CARE_PLAN_SECTION_TEMPLATES: ReadonlyArray<{
   { section_key: "risks", title: "Risks", sort_order: 1 },
   { section_key: "medication", title: "Medication", sort_order: 2 },
   { section_key: "preferences", title: "Preferences", sort_order: 3 },
-  { section_key: "emergency", title: "Emergency / escalation notes", sort_order: 4 },
+  { section_key: "mobility", title: "Mobility", sort_order: 4 },
+  { section_key: "nutrition_hydration", title: "Nutrition / Hydration", sort_order: 5 },
+  { section_key: "emergency", title: "Emergency / Escalation Notes", sort_order: 6 },
 ];
 
 /**
@@ -115,4 +117,37 @@ export async function getCarePlanByIdForClient(
 
   if (error) return null;
   return (data as CarePlanRow) ?? null;
+}
+
+export async function loadArchivedCarePlans(
+  supabase: SupabaseClient,
+  agencyId: string,
+  clientId: string
+): Promise<CarePlanRow[]> {
+  const { data, error } = await supabase
+    .from("care_plans")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("agency_id", agencyId)
+    .eq("status", "archived")
+    .order("updated_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CarePlanRow[];
+}
+
+export async function loadCarePlanSections(
+  supabase: SupabaseClient,
+  agencyId: string,
+  carePlanId: string
+): Promise<CarePlanSectionRow[]> {
+  const { data, error } = await supabase
+    .from("care_plan_sections")
+    .select("*")
+    .eq("care_plan_id", carePlanId)
+    .eq("agency_id", agencyId)
+    .order("sort_order", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CarePlanSectionRow[];
 }

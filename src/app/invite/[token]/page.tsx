@@ -10,41 +10,44 @@ export default function InvitePage() {
 
   const [status, setStatus] = useState<
     "loading" | "accepting" | "accepted" | "already_member" | "error" | "not_logged_in"
-  >("loading");
+  >("accepting");
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     if (!token) return;
-    acceptInvite();
-  }, [token]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/invite/${token}`, { method: "POST" });
+        const data = await res.json();
 
-  async function acceptInvite() {
-    setStatus("accepting");
-    try {
-      const res = await fetch(`/api/invite/${token}`, { method: "POST" });
-      const data = await res.json();
+        if (cancelled) return;
+        if (res.status === 401) {
+          setStatus("not_logged_in");
+          return;
+        }
+        if (!res.ok) {
+          setStatus("error");
+          setErrorMsg(data.error ?? "Failed to accept invite");
+          return;
+        }
 
-      if (res.status === 401) {
-        setStatus("not_logged_in");
-        return;
-      }
-      if (!res.ok) {
+        const result = data.result;
+        if (result?.status === "already_member") {
+          setStatus("already_member");
+        } else {
+          setStatus("accepted");
+        }
+      } catch {
+        if (cancelled) return;
         setStatus("error");
-        setErrorMsg(data.error ?? "Failed to accept invite");
-        return;
+        setErrorMsg("Something went wrong. Please try again.");
       }
-
-      const result = data.result;
-      if (result?.status === "already_member") {
-        setStatus("already_member");
-      } else {
-        setStatus("accepted");
-      }
-    } catch {
-      setStatus("error");
-      setErrorMsg("Something went wrong. Please try again.");
-    }
-  }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">

@@ -24,6 +24,8 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
   const [error, setError] = useState("");
   const [plan, setPlan] = useState<CarePlan | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
+  const [archivedPlans, setArchivedPlans] = useState<CarePlan[]>([]);
+  const [viewingArchivedId, setViewingArchivedId] = useState<string | null>(null);
 
   const [planStatus, setPlanStatus] = useState("draft");
   const [planVersion, setPlanVersion] = useState(1);
@@ -50,8 +52,12 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
       }
       const p = data?.plan as CarePlan | null | undefined;
       const s = Array.isArray(data?.sections) ? (data.sections as Section[]) : [];
+      const archived = Array.isArray(data?.archived_plans)
+        ? (data.archived_plans as CarePlan[])
+        : [];
       setPlan(p ?? null);
       setSections(s);
+      setArchivedPlans(archived);
       if (p) {
         setPlanStatus(p.status);
         setPlanVersion(p.version);
@@ -66,6 +72,34 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
       setLoading(false);
     }
   }, [clientId]);
+
+  async function loadArchivedPlan(planId: string) {
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/care-plan?plan_id=${encodeURIComponent(planId)}`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(typeof data?.error === "string" ? data.error : "Failed to load archived plan");
+        return;
+      }
+      const p = data?.plan as CarePlan | null | undefined;
+      const s = Array.isArray(data?.sections) ? (data.sections as Section[]) : [];
+      setPlan(p ?? null);
+      setSections(s);
+      if (p) {
+        setPlanStatus(p.status);
+        setPlanVersion(p.version);
+        setEffectiveFrom(p.effective_from ? p.effective_from.slice(0, 10) : "");
+        setEffectiveTo(p.effective_to ? p.effective_to.slice(0, 10) : "");
+      }
+      setViewingArchivedId(planId);
+    } catch {
+      setError("Failed to load archived plan");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -217,6 +251,7 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
       <p className="text-sm text-slate-600">Loading care plan…</p>
     );
   }
+  const isReadOnly = plan?.status === "archived";
 
   return (
     <div className="space-y-8">
@@ -237,6 +272,26 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
           >
             {savingPlan ? "Creating…" : "Create care plan"}
           </button>
+          {archivedPlans.length > 0 ? (
+            <div className="mt-6 border-t border-slate-100 pt-4">
+              <h3 className="text-sm font-semibold text-slate-900">Archived plans</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Archived plans are retained for audit/history.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {archivedPlans.map((ap) => (
+                  <button
+                    key={ap.id}
+                    type="button"
+                    onClick={() => void loadArchivedPlan(ap.id)}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    View v{ap.version} ({new Date(ap.updated_at).toLocaleDateString()})
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
         <>
@@ -251,6 +306,7 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
                 <select
                   value={planStatus}
                   onChange={(e) => setPlanStatus(e.target.value)}
+                  disabled={isReadOnly}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
                 >
                   <option value="draft">draft</option>
@@ -264,6 +320,7 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
                   min={1}
                   value={planVersion}
                   onChange={(e) => setPlanVersion(Number(e.target.value) || 1)}
+                  disabled={isReadOnly}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
                 />
               </label>
@@ -273,6 +330,7 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
                   type="date"
                   value={effectiveFrom}
                   onChange={(e) => setEffectiveFrom(e.target.value)}
+                  disabled={isReadOnly}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
                 />
               </label>
@@ -282,6 +340,7 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
                   type="date"
                   value={effectiveTo}
                   onChange={(e) => setEffectiveTo(e.target.value)}
+                  disabled={isReadOnly}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
                 />
               </label>
@@ -292,7 +351,7 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
                 type="submit"
-                disabled={savingPlan || archiving}
+                disabled={savingPlan || archiving || isReadOnly}
                 className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
               >
                 {savingPlan ? "Saving…" : "Save plan"}
@@ -300,14 +359,28 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
               <button
                 type="button"
                 onClick={() => void handleArchivePlan()}
-                disabled={savingPlan || archiving}
+                disabled={savingPlan || archiving || isReadOnly}
                 className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-60"
               >
                 {archiving ? "Archiving…" : "Archive plan"}
               </button>
+              {viewingArchivedId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewingArchivedId(null);
+                    void load();
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Back to current
+                </button>
+              ) : null}
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Archiving hides this plan and lets you start a new one. Archived plans are kept for records.
+              {isReadOnly
+                ? "Archived plans are retained for audit/history."
+                : "Archiving hides this plan and lets you start a new one. Archived plans are retained for audit/history."}
             </p>
           </form>
 
@@ -323,10 +396,12 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
                   section={s}
                   onSave={(title, body, sort_order) => saveSection(s, title, body, sort_order)}
                   onDelete={() => void deleteSection(s.id)}
+                  readOnly={isReadOnly}
                 />
               ))}
             </ul>
 
+            {!isReadOnly ? (
             <form onSubmit={handleAddSection} className="mt-8 border-t border-slate-100 pt-6">
               <h3 className="text-sm font-semibold text-slate-800">Add section</h3>
               <label className="mt-2 block text-sm">
@@ -355,6 +430,7 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
                 {adding ? "Adding…" : "Add section"}
               </button>
             </form>
+            ) : null}
           </div>
         </>
       )}
@@ -366,10 +442,12 @@ function SectionEditor({
   section,
   onSave,
   onDelete,
+  readOnly = false,
 }: {
   section: Section;
   onSave: (title: string, body: string, sort_order: number) => void;
   onDelete: () => void;
+  readOnly?: boolean;
 }) {
   const [title, setTitle] = useState(section.title);
   const [body, setBody] = useState(section.body);
@@ -401,6 +479,7 @@ function SectionEditor({
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              disabled={readOnly}
               className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
           </label>
@@ -410,6 +489,7 @@ function SectionEditor({
               type="number"
               value={sortOrder}
               onChange={(e) => setSortOrder(Number(e.target.value) || 0)}
+              disabled={readOnly}
               className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
           </label>
@@ -419,6 +499,7 @@ function SectionEditor({
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
+            disabled={readOnly}
             rows={5}
             className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900"
           />
@@ -426,7 +507,7 @@ function SectionEditor({
         <div className="flex flex-wrap gap-2">
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || readOnly}
             className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
           >
             {saving ? "Saving…" : "Save section"}
@@ -434,6 +515,7 @@ function SectionEditor({
           <button
             type="button"
             onClick={onDelete}
+            disabled={readOnly}
             className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
           >
             Delete

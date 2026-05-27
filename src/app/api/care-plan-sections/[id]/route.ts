@@ -8,7 +8,11 @@ async function loadSectionWithPlanClient(
   supabase: SupabaseClient,
   agencyId: string,
   sectionId: string
-): Promise<{ section: CarePlanSectionRow; client_id: string } | null> {
+): Promise<{
+  section: CarePlanSectionRow;
+  client_id: string;
+  plan_status: string;
+} | null> {
   const { data: section, error } = await supabase
     .from("care_plan_sections")
     .select("*")
@@ -20,7 +24,7 @@ async function loadSectionWithPlanClient(
 
   const { data: plan } = await supabase
     .from("care_plans")
-    .select("client_id, agency_id")
+    .select("client_id, agency_id, status")
     .eq("id", (section as CarePlanSectionRow).care_plan_id)
     .eq("agency_id", agencyId)
     .maybeSingle();
@@ -32,6 +36,7 @@ async function loadSectionWithPlanClient(
   return {
     section: section as CarePlanSectionRow,
     client_id: (plan as { client_id: string }).client_id,
+    plan_status: (plan as { status: string }).status,
   };
 }
 
@@ -50,6 +55,9 @@ export async function PATCH(
   const loaded = await loadSectionWithPlanClient(supabase, agencyId, sectionId);
   if (!loaded) {
     return NextResponse.json({ error: "Section not found" }, { status: 404 });
+  }
+  if (loaded.plan_status === "archived") {
+    return NextResponse.json({ error: "Archived care plans are read-only." }, { status: 403 });
   }
 
   let body: Record<string, unknown>;
@@ -112,6 +120,9 @@ export async function DELETE(
   const loaded = await loadSectionWithPlanClient(supabase, agencyId, sectionId);
   if (!loaded) {
     return NextResponse.json({ error: "Section not found" }, { status: 404 });
+  }
+  if (loaded.plan_status === "archived") {
+    return NextResponse.json({ error: "Archived care plans are read-only." }, { status: 403 });
   }
 
   const { error } = await supabase

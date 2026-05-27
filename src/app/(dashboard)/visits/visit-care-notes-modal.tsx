@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { isHighlightNoteType } from "@/lib/visit-audit";
 
 type VisitRef = {
   id: string;
@@ -24,15 +25,26 @@ const NOTE_TYPES = [
   { value: "general", label: "general" },
   { value: "handover", label: "handover" },
   { value: "clinical", label: "clinical" },
+  { value: "risk", label: "risk" },
+  { value: "safeguarding", label: "safeguarding" },
 ];
 
-type NoteFilter = "all" | "general" | "handover" | "clinical" | "untagged";
+type NoteFilter =
+  | "all"
+  | "general"
+  | "handover"
+  | "clinical"
+  | "risk"
+  | "safeguarding"
+  | "untagged";
 
 const FILTER_OPTIONS: { value: NoteFilter; label: string }[] = [
   { value: "all", label: "All notes" },
   { value: "general", label: "General" },
   { value: "handover", label: "Handover" },
   { value: "clinical", label: "Clinical" },
+  { value: "risk", label: "Risk" },
+  { value: "safeguarding", label: "Safeguarding" },
   { value: "untagged", label: "Untagged" },
 ];
 
@@ -253,7 +265,11 @@ export function VisitCareNotesModal({
               {filteredNotes.map((n) => (
                 <li
                   key={n.id}
-                  className="rounded-lg border border-slate-100 bg-slate-50/80 p-3"
+                  className={`rounded-lg border p-3 ${
+                    isHighlightNoteType(n.note_type)
+                      ? "border-red-200 bg-red-50/70"
+                      : "border-slate-100 bg-slate-50/80"
+                  }`}
                 >
                   {editingId === n.id ? (
                     <div className="space-y-2">

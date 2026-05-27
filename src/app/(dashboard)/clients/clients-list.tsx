@@ -160,7 +160,7 @@ export function ClientsList({ clients }: { clients: Client[] }) {
                     href={`/clients/${c.id}/care-plan`}
                     className="text-sm font-medium text-slate-700 transition hover:text-slate-900"
                   >
-                    Care plan
+                    View care plan
                   </Link>
                   <button type="button" onClick={() => { setError(""); setEditClient(c); }} className="text-sm font-medium text-blue-600 transition hover:text-blue-500">
                     Edit

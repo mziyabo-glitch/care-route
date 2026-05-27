@@ -62,6 +62,7 @@ export function VisitMapPageClient({ initialDate }: { initialDate: string }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mapUnavailable, setMapUnavailable] = useState(false);
+  const [onlyIssues, setOnlyIssues] = useState(false);
 
   const load = useCallback(async (d: string, carer: string) => {
     setLoading(true);
@@ -92,7 +93,15 @@ export function VisitMapPageClient({ initialDate }: { initialDate: string }) {
   }, [date, carerId, load]);
 
   const selected = data?.visits.find((v) => v.id === selectedId) ?? null;
-  const visits = data?.visits ?? [];
+  const allVisits = data?.visits ?? [];
+  const visits = onlyIssues
+    ? allVisits.filter(
+        (v) =>
+          v.display_status === "late" ||
+          v.status === "missed" ||
+          v.missing_care_note
+      )
+    : allVisits;
   const mappable = visits.filter(
     (v) => v.client_lat != null && v.client_lng != null
   );
@@ -136,6 +145,15 @@ export function VisitMapPageClient({ initialDate }: { initialDate: string }) {
             ))}
           </select>
         </label>
+        <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={onlyIssues}
+            onChange={(e) => setOnlyIssues(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          />
+          Only show issues
+        </label>
         {data && !loading && (
           <p className="text-sm text-slate-600">
             {visits.length} visit{visits.length === 1 ? "" : "s"}
@@ -163,7 +181,7 @@ export function VisitMapPageClient({ initialDate }: { initialDate: string }) {
       )}
 
       {(loading || visits.length > 0) && (
-        <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-3">
             {loading ? (
               <div className="flex h-[min(70vh,560px)] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-slate-500">
@@ -371,17 +389,30 @@ function VisitMapLegend() {
   ] as const;
 
   return (
-    <div className="flex flex-wrap gap-4 text-xs text-slate-600">
-      {items.map((item) => (
-        <span key={item.label} className="inline-flex items-center gap-1.5">
-          <span
-            className="inline-block h-3 w-3 rounded-full border border-white shadow"
-            style={{ backgroundColor: item.color }}
-            aria-hidden
-          />
-          {item.label}
+    <div className="space-y-2 text-xs text-slate-600">
+      <div className="flex flex-wrap gap-4">
+        {items.map((item) => (
+          <span key={item.label} className="inline-flex items-center gap-1.5">
+            <span
+              className="inline-block h-3 w-3 rounded-full border border-white shadow"
+              style={{ backgroundColor: item.color }}
+              aria-hidden
+            />
+            {item.label}
+          </span>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <span className="rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-900">
+          Issue: Missing notes
         </span>
-      ))}
+        <span className="rounded bg-orange-100 px-2 py-0.5 font-medium text-orange-900">
+          Issue: Late
+        </span>
+        <span className="rounded bg-red-100 px-2 py-0.5 font-medium text-red-800">
+          Issue: Missed
+        </span>
+      </div>
     </div>
   );
 }

@@ -4,13 +4,15 @@ import { getCurrentAgencyId } from "@/lib/agency";
 import {
   DEFAULT_CARE_PLAN_SECTION_TEMPLATES,
   getCarePlanByIdForClient,
+  loadArchivedCarePlans,
   loadCarePlanBundle,
+  loadCarePlanSections,
   verifyClientBelongsToAgency,
   type CarePlanRow,
 } from "@/lib/care-plan-data";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const agencyId = await getCurrentAgencyId();
@@ -26,9 +28,27 @@ export async function GET(
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
+  const url = new URL(request.url);
+  const planIdParam = url.searchParams.get("plan_id")?.trim() ?? "";
+
   try {
+    if (planIdParam) {
+      const plan = await getCarePlanByIdForClient(
+        supabase,
+        agencyId,
+        planIdParam,
+        clientId
+      );
+      if (!plan) {
+        return NextResponse.json({ error: "Care plan not found" }, { status: 404 });
+      }
+      const sections = await loadCarePlanSections(supabase, agencyId, plan.id);
+      return NextResponse.json({ plan, sections, read_only: plan.status === "archived" });
+    }
+
     const bundle = await loadCarePlanBundle(supabase, agencyId, clientId);
-    return NextResponse.json(bundle);
+    const archived_plans = await loadArchivedCarePlans(supabase, agencyId, clientId);
+    return NextResponse.json({ ...bundle, archived_plans });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to load care plan";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -188,6 +208,13 @@ export async function PATCH(
   const existing = await getCarePlanByIdForClient(supabase, agencyId, planId, clientId);
   if (!existing) {
     return NextResponse.json({ error: "Care plan not found" }, { status: 404 });
+  }
+
+  if (existing.status === "archived") {
+    return NextResponse.json(
+      { error: "Archived care plans are read-only." },
+      { status: 403 }
+    );
   }
 
   const updates: Record<string, unknown> = {
