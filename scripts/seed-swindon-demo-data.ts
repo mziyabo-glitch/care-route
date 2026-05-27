@@ -33,7 +33,6 @@ export type DemoStaff = {
   role: "owner" | "manager" | "carer";
   phone: string;
   payroll_number?: string;
-  notes: string;
 };
 
 export const DEMO_STAFF: DemoStaff[] = [
@@ -43,7 +42,6 @@ export const DEMO_STAFF: DemoStaff[] = [
     email: `brian.demo.admin@${EMAIL_DOMAIN}`,
     role: "owner",
     phone: "01793000001",
-    notes: "[DEMO_STAFF] Demo owner profile label — maps to DEMO_SEED_OWNER_USER_ID membership.",
   },
   {
     key: "sarah-coordinator",
@@ -52,7 +50,6 @@ export const DEMO_STAFF: DemoStaff[] = [
     role: "manager",
     phone: "01793000002",
     payroll_number: "SW-DEMO-MGR-01",
-    notes: "[DEMO_STAFF] Coordinator (manager role on carer record; no separate auth user).",
   },
   {
     key: "amara-williams",
@@ -61,7 +58,6 @@ export const DEMO_STAFF: DemoStaff[] = [
     role: "carer",
     phone: "01793000101",
     payroll_number: "SW-DEMO-C-01",
-    notes: "[DEMO_STAFF]",
   },
   {
     key: "james-patel",
@@ -70,7 +66,6 @@ export const DEMO_STAFF: DemoStaff[] = [
     role: "carer",
     phone: "01793000102",
     payroll_number: "SW-DEMO-C-02",
-    notes: "[DEMO_STAFF]",
   },
   {
     key: "chloe-evans",
@@ -79,7 +74,6 @@ export const DEMO_STAFF: DemoStaff[] = [
     role: "carer",
     phone: "01793000103",
     payroll_number: "SW-DEMO-C-03",
-    notes: "[DEMO_STAFF]",
   },
   {
     key: "david-morgan",
@@ -88,7 +82,6 @@ export const DEMO_STAFF: DemoStaff[] = [
     role: "carer",
     phone: "01793000104",
     payroll_number: "SW-DEMO-C-04",
-    notes: "[DEMO_STAFF]",
   },
   {
     key: "grace-taylor",
@@ -97,7 +90,6 @@ export const DEMO_STAFF: DemoStaff[] = [
     role: "carer",
     phone: "01793000105",
     payroll_number: "SW-DEMO-C-05",
-    notes: "[DEMO_STAFF]",
   },
   {
     key: "mohammed-ali",
@@ -106,7 +98,6 @@ export const DEMO_STAFF: DemoStaff[] = [
     role: "carer",
     phone: "01793000106",
     payroll_number: "SW-DEMO-C-06",
-    notes: "[DEMO_STAFF]",
   },
 ];
 

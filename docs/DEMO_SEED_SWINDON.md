@@ -40,6 +40,7 @@ Legacy agency name `Swindon Community Care Demo` is **renamed** to `Swindon Care
 
 | Desired field | Status |
 |---------------|--------|
+| Carer `notes` column | **Not in schema** — staff labels live in this doc only; seed writes `carers` with production columns (`full_name`, `name`, `email`, `phone`, `role`, `active`, `payroll_number`) |
 | Client `preferred_name` column | Stored in `clients.notes` (demo tag) |
 | Client `date_of_birth` / age | Age in notes only |
 | Client `risk_level` column | In notes only |
@@ -84,8 +85,8 @@ Re-running is safe: entities are matched by demo tags/emails; demo visits are re
 
 | Role | Name | Notes |
 |------|------|-------|
-| Owner (auth) | Brian Demo Admin | Your `DEMO_SEED_OWNER_USER_ID` login |
-| Coordinator | Sarah Coordinator | `carers` row, role `manager` — no separate login |
+| Owner (auth) | Brian Demo Admin | Your `DEMO_SEED_OWNER_USER_ID` login; not stored as a `carers` row |
+| Coordinator | Sarah Coordinator | `carers` row, role `manager` — no separate auth login |
 | Carer | Amara Williams | |
 | Carer | James Patel | |
 | Carer | Chloe Evans | |

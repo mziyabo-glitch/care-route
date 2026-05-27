@@ -163,6 +163,7 @@ async function upsertStaff(
   agencyId: string,
   counts: Counts
 ): Promise<Map<string, string>> {
+  // Keep this payload aligned with the production carers table. Do not include decorative seed-only fields.
   const ids = new Map<string, string>();
 
   for (const person of DEMO_STAFF) {
@@ -190,7 +191,6 @@ async function upsertStaff(
           role: carerRole,
           active: true,
           payroll_number: person.payroll_number ?? null,
-          notes: person.notes,
         })
         .eq("id", prev.id as string);
       ids.set(person.key, prev.id as string);
@@ -208,7 +208,6 @@ async function upsertStaff(
         role: carerRole,
         active: true,
         payroll_number: person.payroll_number ?? null,
-        notes: person.notes,
       })
       .select("id")
       .single();
