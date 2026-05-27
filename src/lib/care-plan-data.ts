@@ -111,6 +111,61 @@ export async function loadOverdueCarePlanReviews(
   }));
 }
 
+function addDaysIso(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export type CarePlanReviewStats = {
+  overdue: number;
+  dueThisWeek: number;
+  upToDate: number;
+  topOverdue: OverdueCarePlanReview[];
+};
+
+/** Active/draft plans with a review due date — counts only, no plan body text. */
+export async function loadCarePlanReviewStats(
+  supabase: SupabaseClient,
+  agencyId: string,
+  today: string
+): Promise<CarePlanReviewStats> {
+  const weekEnd = addDaysIso(today, 6);
+
+  const { data: plans, error } = await supabase
+    .from("care_plans")
+    .select("id, client_id, review_due_date, status")
+    .eq("agency_id", agencyId)
+    .in("status", ["draft", "active"])
+    .not("review_due_date", "is", null);
+
+  if (error) throw new Error(error.message);
+  if (!plans?.length) {
+    return { overdue: 0, dueThisWeek: 0, upToDate: 0, topOverdue: [] };
+  }
+
+  let overdue = 0;
+  let dueThisWeek = 0;
+  let upToDate = 0;
+
+  for (const p of plans) {
+    const due = p.review_due_date as string;
+    if (due < today) overdue += 1;
+    else if (due <= weekEnd) dueThisWeek += 1;
+    else upToDate += 1;
+  }
+
+  const topOverdue = await loadOverdueCarePlanReviews(supabase, agencyId);
+  topOverdue.sort((a, b) => a.review_due_date.localeCompare(b.review_due_date));
+
+  return {
+    overdue,
+    dueThisWeek,
+    upToDate,
+    topOverdue: topOverdue.slice(0, 3),
+  };
+}
+
 /**
  * Server-only: confirms the client row exists under the resolved agency (never trust client agency_id).
  */

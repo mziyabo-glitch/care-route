@@ -1,6 +1,6 @@
 # Dashboard data path audit
 
-**Date:** 2026-05-26  
+**Date:** 2026-05-27  
 **Scope:** Care Control Centre landing page (`src/app/(dashboard)/dashboard/`), `src/lib/dashboard-data.ts`, and direct dependencies used only on that path.
 
 **Disclaimer:** Engineering security review — not legal or CQC certification.
@@ -22,12 +22,13 @@
 | Source | Agency scoping | Membership check |
 |--------|----------------|------------------|
 | `agencies.select` | `.eq("id", agencyId)` | RLS + prior membership resolution |
-| `count_carers` RPC | `p_agency_id` | SECURITY DEFINER checks `agency_members` |
-| `list_visits_for_week` RPC | `p_agency_id` | Same |
+| `list_visits_for_week` RPC | `p_agency_id` | SECURITY DEFINER checks `agency_members` |
 | `visit_actuals` | `.eq("agency_id", agencyId)` | RLS |
-| `visit_care_notes` (via `getComplianceIssues`) | `.eq("agency_id", agencyId)` | RLS |
+| `visit_care_notes` (via `getComplianceIssues`) | `.eq("agency_id", agencyId)` | RLS — existence only, **no note body** |
 | `getVisitMapRows` / `getComplianceIssues` | Passes resolved `agencyId` | Documented in lib headers |
-| `list_billing_for_range` RPC | `p_agency_id` | Role + membership inside RPC |
+| `care_plans` (review stats) | `.eq("agency_id", agencyId)` | RLS |
+| `cqc_evidence_items` | `.eq("agency_id", agencyId)` | RLS — counts only on dashboard |
+| `care_plan_sections` (restricted count) | `.eq("agency_id", agencyId)` + `confidentiality_level` | RLS — **count only**, no section body |
 
 **No unscoped queries** on the dashboard path: every table read includes `agency_id` from `getCurrentAgencyId()` or goes through an RPC that validates membership.
 
@@ -39,7 +40,9 @@
 |--------------|------------------|
 | Client-supplied `agency_id` | **Not used** |
 | Service role Supabase client | **Not used** — `createClient()` from `@/lib/supabase/server` (anon + user JWT) |
-| Logging care note bodies / visit notes | **Not present** — task labels truncate `visits.notes` for display only; no `console.log` of clinical text |
+| Care note / visit note bodies on dashboard | **Not present** — task labels fixed to `"Care visit"`; no `visit_care_notes.body` or `care_plan_sections.body` |
+| CQC evidence descriptions | **Not present** — category counts only |
+| Logging clinical text | **Not present** — no `console.log` of note or plan content |
 
 ---
 
@@ -47,10 +50,10 @@
 
 | Section | Gate | Behaviour if denied |
 |---------|------|---------------------|
-| Compliance pulse (tracked tiles) | `canAccessCompliance` (manager+) | Metrics hidden (`tracked: false`) for viewers |
-| Payroll snapshot | `owner` / `admin` | Payroll hours tile omitted |
-| Billing + visit map preview | `canEdit` (manager+) | Section hidden for viewers |
-| Billing RPC | RPC raises if not manager+ | Caught by role gate before call |
+| CQC readiness strip | `canAccessCompliance` (manager+) | Section hidden |
+| Care plan review stats + top overdue | `canAccessCompliance` (manager+) | Section hidden; safety tile for overdue plans hidden |
+| High-risk CQC safety tile | `canAccessCompliance` | Hidden for viewers/carers |
+| Confidentiality restricted count | All authenticated roles | Count only; carers see notice that restricted sections are not shown to their role |
 
 ---
 
@@ -60,7 +63,7 @@
 |-------|----------|--------|
 | None critical on dashboard path | — | — |
 | `agencies` direct select | Low | Acceptable: RLS limits to member agencies; only `name` selected |
-| Payroll minutes computed server-side | Info | Mirrors `generate_timesheet` duration logic; not a separate RPC — documented in `DASHBOARD_COMPLIANCE_METRICS.md` |
+| Restricted section count visible to carers | Info | Count only — no titles or bodies; aligns with transparency without disclosure |
 
 ---
 
@@ -69,6 +72,7 @@
 1. Keep new dashboard queries behind `loadDashboardData()` — single audit surface.
 2. Code review checklist: any new tile must use `getCurrentAgencyId()` + existing RPC or `.eq("agency_id", …)`.
 3. Do not add client-side fetches that accept `agency_id` query params.
+4. Do not reintroduce visit `notes` or care note text on the dashboard UI.
 
 ---
 
@@ -78,6 +82,8 @@
 - `src/app/(dashboard)/dashboard/dashboard-view.tsx`
 - `src/lib/dashboard-data.ts`
 - `src/lib/agency.ts`
+- `src/lib/care-plan-data.ts`
+- `src/lib/cqc-evidence-data.ts`
 - `src/lib/compliance-data.ts`
 - `src/lib/visit-map-data.ts`
 - `src/lib/permissions.ts`

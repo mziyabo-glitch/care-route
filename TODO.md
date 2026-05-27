@@ -67,6 +67,15 @@ Public smoke **pass**. Full manager+ smoke and dashboard env confirmation **stil
 
 ---
 
+## F. Care Control Centre dashboard — **REPO COMPLETE** (2026-05-27)
+
+- [x] Redesign landing page: hero, safety status, priority actions (top 5), Now/Next/Later timeline, CQC readiness strip, care plan reviews, confidentiality panel
+- [x] `loadDashboardData` extended: CQC category counts, care plan review stats, restricted section count — no note/plan bodies
+- [x] [docs/DASHBOARD_DATA_AUDIT.md](docs/DASHBOARD_DATA_AUDIT.md) · [docs/DASHBOARD_COMPLIANCE_METRICS.md](docs/DASHBOARD_COMPLIANCE_METRICS.md)
+- [ ] Production migration + logged-in smoke (manager+ and carer roles)
+
+---
+
 ## Known gaps (unchanged)
 
 - Multi-agency `getCurrentAgencyId()` — newest membership only ([docs/AGENCY_SWITCHER.md](docs/AGENCY_SWITCHER.md))

@@ -1,8 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Role } from "@/lib/permissions";
-import { canAccessCompliance, canEdit } from "@/lib/permissions";
+import { canAccessCompliance } from "@/lib/permissions";
+import { canViewRestrictedCarePlan } from "@/lib/roles";
 import { fetchAgencyName } from "@/lib/agency";
+import { loadCarePlanReviewStats, type OverdueCarePlanReview } from "@/lib/care-plan-data";
 import { getComplianceIssues } from "@/lib/compliance-data";
+import {
+  CQC_CATEGORY_LABELS,
+  CQC_CATEGORIES,
+  loadCqcEvidenceForAgency,
+  summariseCqcEvidence,
+  type CqcCategory,
+} from "@/lib/cqc-evidence-data";
 import { resolveUserGreetingName } from "@/lib/user-display-name";
 import { getVisitMapRows, type VisitMapRow } from "@/lib/visit-map-data";
 
@@ -56,22 +65,25 @@ export type DashboardTimelineItem = {
   status: string;
 };
 
-export type DashboardComplianceMetric = {
-  id: string;
+export type DashboardCqcCategoryCard = {
+  category: CqcCategory;
   label: string;
-  value: number | null;
-  tracked: boolean;
-  href?: string;
+  open: number;
+  overdue: number;
+  highRiskOpen: number;
 };
 
-export type DashboardPayrollBilling = {
+export type DashboardCarePlanReviews = {
   visible: boolean;
-  payrollVisible: boolean;
-  completedMinutes: number;
-  /** Checked-in work today (completed + in progress with actuals) — not planned future slots. */
-  payrollMinutes: number;
-  billableMinutes: number;
-  missedVisits: number;
+  overdue: number;
+  dueThisWeek: number;
+  upToDate: number;
+  topOverdue: OverdueCarePlanReview[];
+};
+
+export type DashboardConfidentiality = {
+  restrictedSectionCount: number;
+  canViewRestricted: boolean;
 };
 
 export type DashboardData = {
@@ -83,30 +95,23 @@ export type DashboardData = {
   safety: {
     visitsToday: number;
     completed: number;
-    upcomingOrInProgress: number;
     late: number;
     missed: number;
     completedWithoutNotes: number;
+    carePlansOverdue: number;
+    highRiskCqcOpen: number;
   };
-  needsAction: DashboardActionItem[];
+  priorityActions: DashboardActionItem[];
   happeningNow: DashboardTimelineItem[];
   upNext: DashboardTimelineItem[];
-  rotaCapacity: {
-    totalCarers: number;
-    assignedToday: number;
-    spare: number;
-    doubleUpCount: number;
-    busiestCarers: { name: string; visitCount: number }[];
-  };
-  compliancePulse: DashboardComplianceMetric[];
-  payrollBilling: DashboardPayrollBilling;
-  visitMapPreview: {
+  laterToday: DashboardTimelineItem[];
+  cqcReadiness: {
     visible: boolean;
-    rows: VisitMapRow[];
-    geocodedCount: number;
-    lateCount: number;
-    missedCount: number;
+    categories: DashboardCqcCategoryCard[];
+    totalHighRiskOpen: number;
   };
+  carePlanReviews: DashboardCarePlanReviews;
+  confidentiality: DashboardConfidentiality;
 };
 
 /** UK domiciliary call windows (minutes from midnight, Europe/London). */
@@ -141,38 +146,8 @@ function visitInCallWindow(startTime: string): boolean {
   return callWindowForStart(startTime) != null;
 }
 
-function taskLabelFromNotes(notes: string | null | undefined): string {
-  if (!notes?.trim()) return "Care visit";
-  const first = notes.trim().split(/\n/)[0] ?? "";
-  const cleaned = first.replace(/\[DEMO_VISIT_SEED\]/gi, "").trim();
-  if (!cleaned) return "Care visit";
-  return cleaned.length > 48 ? `${cleaned.slice(0, 45)}…` : cleaned;
-}
-
-function payrollMinutesForVisit(
-  startTime: string,
-  endTime: string,
-  actual?: {
-    check_in_at: string | null;
-    check_out_at: string | null;
-    break_minutes?: number | null;
-  }
-): number {
-  if (actual?.check_in_at && actual?.check_out_at) {
-    const raw = Math.floor(
-      (new Date(actual.check_out_at).getTime() -
-        new Date(actual.check_in_at).getTime()) /
-        60000
-    );
-    return Math.max(0, raw - (actual.break_minutes ?? 0));
-  }
-  return Math.max(
-    0,
-    Math.floor(
-      (new Date(endTime).getTime() - new Date(startTime).getTime()) / 60000
-    )
-  );
-}
+/** Dashboard never surfaces visit note or care note bodies. */
+const DASHBOARD_TASK_LABEL = "Care visit";
 
 function actionPriority(
   kind: "missed" | "late" | "no_notes" | "checked_in" | "double_up"
@@ -211,15 +186,18 @@ export async function loadDashboardData(
   const today = todayInLondon();
   const now = new Date();
 
+  const showGovernance = canAccessCompliance(options.role);
+
   const [
     agencyName,
-    carersCountRes,
     visitRows,
     complianceToday,
     weekVisitsRes,
+    carePlanStats,
+    cqcItems,
+    restrictedSectionsRes,
   ] = await Promise.all([
     fetchAgencyName(supabase, agencyId),
-    supabase.rpc("count_carers", { p_agency_id: agencyId }),
     getVisitMapRows(supabase, agencyId, today),
     getComplianceIssues(supabase, agencyId, today, today).catch(() => ({
       missed_visits: [],
@@ -230,9 +208,28 @@ export async function loadDashboardData(
       p_week_start: dayRangeUtc(today).start,
       p_week_end: dayRangeUtc(today).end,
     }),
+    showGovernance
+      ? loadCarePlanReviewStats(supabase, agencyId, today).catch(() => ({
+          overdue: 0,
+          dueThisWeek: 0,
+          upToDate: 0,
+          topOverdue: [],
+        }))
+      : Promise.resolve({
+          overdue: 0,
+          dueThisWeek: 0,
+          upToDate: 0,
+          topOverdue: [],
+        }),
+    showGovernance
+      ? loadCqcEvidenceForAgency(supabase, agencyId).catch(() => [])
+      : Promise.resolve([]),
+    supabase
+      .from("care_plan_sections")
+      .select("id", { count: "exact", head: true })
+      .eq("agency_id", agencyId)
+      .eq("confidentiality_level", "restricted"),
   ]);
-
-  const totalCarers = Number(carersCountRes.data ?? 0);
   const weekVisits: WeekVisit[] = Array.isArray(weekVisitsRes.data)
     ? (weekVisitsRes.data as WeekVisit[])
     : [];
@@ -266,17 +263,11 @@ export async function loadDashboardData(
   }
 
   let completed = 0;
-  let upcomingOrInProgress = 0;
   let late = 0;
   let missed = 0;
   let completedWithoutNotes = 0;
-  let doubleUpCount = 0;
-  let completedMinutes = 0;
-  let payrollMinutes = 0;
 
-  const carerVisitCounts = new Map<string, number>();
   const carerNamesById = new Map<string, string>();
-  const assignedCarerIds = new Set<string>();
 
   for (const w of weekVisits) {
     if (!Array.isArray(w.assignments)) continue;
@@ -293,56 +284,17 @@ export async function loadDashboardData(
   for (const v of visitRows) {
     const ds = v.display_status;
     if (ds === "completed") completed += 1;
-    if (
-      ds === "scheduled" ||
-      ds === "due_soon" ||
-      ds === "in_progress" ||
-      ds === "late"
-    ) {
-      upcomingOrInProgress += 1;
-    }
     if (ds === "late") late += 1;
     if (ds === "missed") missed += 1;
     if (v.missing_care_note) completedWithoutNotes += 1;
 
     v.carer_ids.forEach((id, i) => {
-      assignedCarerIds.add(id);
       const name = v.carer_names[i] ?? carerNamesById.get(id) ?? "Carer";
       carerNamesById.set(id, name);
-      carerVisitCounts.set(id, (carerVisitCounts.get(id) ?? 0) + 1);
     });
-
-    const actual = actualsByVisit[v.id];
-    if (v.status === "completed") {
-      completedMinutes += payrollMinutesForVisit(
-        v.start_time,
-        v.end_time,
-        actual
-      );
-    }
-    if (
-      v.status === "completed" ||
-      (v.status === "in_progress" && actual?.check_in_at)
-    ) {
-      payrollMinutes += payrollMinutesForVisit(
-        v.start_time,
-        v.end_time,
-        actual
-      );
-    }
   }
 
-  doubleUpCount = weekVisits.filter(
-    (w) => w.is_joint || w.requires_double_up
-  ).length;
-
-  const busiestCarers = [...carerVisitCounts.entries()]
-    .map(([id, visitCount]) => ({
-      name: carerNamesById.get(id) ?? "Carer",
-      visitCount,
-    }))
-    .sort((a, b) => b.visitCount - a.visitCount)
-    .slice(0, 3);
+  const cqcSummary = summariseCqcEvidence(cqcItems);
 
   const needsActionById = new Map<string, DashboardActionItem>();
   const missedIds = new Set(complianceToday.missed_visits.map((m) => m.id));
@@ -357,14 +309,13 @@ export async function loadDashboardData(
 
   for (const v of visitRows) {
     const raw = weekVisits.find((w) => w.id === v.id);
-    const taskLabel = taskLabelFromNotes(raw?.notes);
     const base = {
       id: v.id,
       clientId: v.client_id,
       clientName: v.client_name,
       startTime: v.start_time,
       endTime: v.end_time,
-      taskLabel,
+      taskLabel: DASHBOARD_TASK_LABEL,
       carerNames: v.carer_names,
       status: v.status,
       displayStatus: v.display_status,
@@ -415,11 +366,13 @@ export async function loadDashboardData(
     }
   }
 
-  const needsAction = [...needsActionById.values()].sort(
-    (a, b) =>
-      a.priority - b.priority ||
-      new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-  );
+  const priorityActions = [...needsActionById.values()]
+    .sort(
+      (a, b) =>
+        a.priority - b.priority ||
+        new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    )
+    .slice(0, 5);
 
   const timelineFromRow = (v: VisitMapRow): DashboardTimelineItem => {
     const raw = weekVisits.find((w) => w.id === v.id);
@@ -429,7 +382,7 @@ export async function loadDashboardData(
       carerNames: v.carer_names,
       startTime: v.start_time,
       endTime: v.end_time,
-      taskLabel: taskLabelFromNotes(raw?.notes),
+      taskLabel: DASHBOARD_TASK_LABEL,
       callWindow: callWindowForStart(v.start_time),
       isDoubleUp: !!raw?.is_joint || !!raw?.requires_double_up,
       displayStatus: v.display_status,
@@ -474,10 +427,28 @@ export async function loadDashboardData(
       (a, b) =>
         new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
     )
+    .slice(0, 4)
+    .map(timelineFromRow);
+
+  const nextIds = new Set(upNext.map((u) => u.id));
+
+  const laterToday = visitRows
+    .filter(
+      (v) =>
+        !happeningIds.has(v.id) &&
+        !nextIds.has(v.id) &&
+        (v.display_status === "scheduled" || v.display_status === "due_soon") &&
+        new Date(v.start_time).getTime() > now.getTime() &&
+        visitInCallWindow(v.start_time)
+    )
+    .sort(
+      (a, b) =>
+        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+    )
     .slice(0, 6)
     .map(timelineFromRow);
 
-  const attentionCount = needsAction.length;
+  const attentionCount = priorityActions.length;
   const operationalLine =
     attentionCount === 0
       ? "No urgent items for today — keep monitoring visits."
@@ -485,77 +456,17 @@ export async function loadDashboardData(
         ? "1 item needs your attention today."
         : `${attentionCount} items need your attention today.`;
 
-  const showCompliance = canAccessCompliance(options.role);
-  const showBilling = canEdit(options.role);
-  const showPayroll =
-    options.role === "owner" || options.role === "admin";
+  const canViewRestricted = canViewRestrictedCarePlan(options.role);
 
-  let billableMinutes = 0;
-  if (showBilling) {
-    const { start, end } = dayRangeUtc(today);
-    const { data: billingRows } = await supabase.rpc("list_billing_for_range", {
-      p_agency_id: agencyId,
-      p_start: start,
-      p_end: end,
-    });
-    for (const row of Array.isArray(billingRows) ? billingRows : []) {
-      const r = row as { billable_minutes?: number };
-      billableMinutes += r.billable_minutes ?? 0;
-    }
-  }
-
-  const compliancePulse: DashboardComplianceMetric[] = [
-    {
-      id: "missed_today",
-      label: "Missed visits (today)",
-      value: showCompliance ? missed : null,
-      tracked: showCompliance,
-      href: "/compliance",
-    },
-    {
-      id: "missing_notes_today",
-      label: "Without care notes (today)",
-      value: showCompliance ? completedWithoutNotes : null,
-      tracked: showCompliance,
-      href: "/compliance",
-    },
-    {
-      id: "late_today",
-      label: "Late / not checked in (today)",
-      value: showCompliance ? late : null,
-      tracked: showCompliance,
-    },
-    {
-      id: "double_up_gaps",
-      label: "Double-up staffing gaps (today)",
-      value: showCompliance
-        ? weekVisits.filter((w) => w.missing_second_carer).length
-        : null,
-      tracked: showCompliance,
-    },
-    {
-      id: "care_plan_review",
-      label: "Care plan reviews overdue",
-      value: null,
-      tracked: false,
-    },
-    {
-      id: "training_expiry",
-      label: "Training / competency expiry",
-      value: null,
-      tracked: false,
-    },
-    {
-      id: "safeguarding",
-      label: "Safeguarding flags open",
-      value: null,
-      tracked: false,
-    },
-  ];
-
-  const geocodedCount = visitRows.filter(
-    (r) => r.client_lat != null && r.client_lng != null
-  ).length;
+  const cqcCategories: DashboardCqcCategoryCard[] = CQC_CATEGORIES.map(
+    (category) => ({
+      category,
+      label: CQC_CATEGORY_LABELS[category],
+      open: cqcSummary.by_category[category].open,
+      overdue: cqcSummary.by_category[category].overdue,
+      highRiskOpen: cqcSummary.by_category[category].high_risk_open,
+    })
+  );
 
   return {
     agencyName,
@@ -572,36 +483,33 @@ export async function loadDashboardData(
     safety: {
       visitsToday: visitRows.length,
       completed,
-      upcomingOrInProgress,
       late,
       missed,
       completedWithoutNotes,
+      carePlansOverdue: showGovernance ? carePlanStats.overdue : 0,
+      highRiskCqcOpen: showGovernance
+        ? cqcSummary.high_risk_open_count
+        : 0,
     },
-    needsAction: needsAction.slice(0, 12),
+    priorityActions,
     happeningNow,
     upNext,
-    rotaCapacity: {
-      totalCarers,
-      assignedToday: assignedCarerIds.size,
-      spare: Math.max(0, totalCarers - assignedCarerIds.size),
-      doubleUpCount,
-      busiestCarers,
+    laterToday,
+    cqcReadiness: {
+      visible: showGovernance,
+      categories: cqcCategories,
+      totalHighRiskOpen: cqcSummary.high_risk_open_count,
     },
-    compliancePulse,
-    payrollBilling: {
-      visible: showBilling || showPayroll,
-      payrollVisible: showPayroll,
-      completedMinutes,
-      payrollMinutes,
-      billableMinutes,
-      missedVisits: missed,
+    carePlanReviews: {
+      visible: showGovernance,
+      overdue: carePlanStats.overdue,
+      dueThisWeek: carePlanStats.dueThisWeek,
+      upToDate: carePlanStats.upToDate,
+      topOverdue: carePlanStats.topOverdue,
     },
-    visitMapPreview: {
-      visible: showBilling,
-      rows: visitRows.slice(0, 8),
-      geocodedCount,
-      lateCount: late,
-      missedCount: missed,
+    confidentiality: {
+      restrictedSectionCount: restrictedSectionsRes.count ?? 0,
+      canViewRestricted,
     },
   };
 }
