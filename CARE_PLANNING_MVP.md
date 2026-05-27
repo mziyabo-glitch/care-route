@@ -23,7 +23,9 @@ Checklists: [`docs/checklists/README.md`](docs/checklists/README.md) · Schema m
 ### Section C polish (May 2026)
 
 - Navigation polish: `View care plan` links now available from visit row, visit detail modal, care notes modal, and client list.
-- Care plan templates: default sections now include **Mobility** and **Nutrition / Hydration** in addition to existing sections.
+- Care plan templates: full domiciliary section set (personal details through confidential notes) — see [docs/CARE_PLANS_MVP.md](docs/CARE_PLANS_MVP.md).
+- Review governance: `review_due_date`, mark reviewed, overdue on compliance dashboard.
+- Confidential sections: `confidentiality_level` + manager-only restricted RLS.
 - Archive flow: archived care plans are now explicitly read-only in API/UI, with archived plans retained and viewable for audit/history.
 - Visit notes UX: filtering by `note_type` is preserved and extended with `risk`/`safeguarding`, with visual highlighting for those note types.
 - Operations UX: visit detail timeline now surfaces scheduled vs actual timings, duration, missing-note warning, GPS mismatch warning, and reusable audit badges.

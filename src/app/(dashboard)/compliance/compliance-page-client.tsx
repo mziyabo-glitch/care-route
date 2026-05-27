@@ -7,13 +7,24 @@ import type {
   ComplianceMissedVisit,
 } from "@/lib/compliance-data";
 import { defaultComplianceDateRange } from "@/lib/compliance-data";
+import type { OverdueCarePlanReview } from "@/lib/care-plan-data";
+import type { CqcEvidenceRow, CqcEvidenceSummary } from "@/lib/cqc-evidence-data";
 import { formatUkTime } from "@/lib/visit-map";
+import {
+  CqcCategoryCards,
+  CqcEvidenceForm,
+  CqcEvidenceList,
+  CqcRecentlyCompleted,
+} from "./cqc-evidence-panel";
 
 type ApiResponse = {
   start: string;
   end: string;
   missed_visits: ComplianceMissedVisit[];
   missing_notes: ComplianceMissingNote[];
+  overdue_care_plan_reviews?: OverdueCarePlanReview[];
+  cqc_summary?: CqcEvidenceSummary;
+  cqc_items?: CqcEvidenceRow[];
   error?: string;
 };
 
@@ -61,9 +72,12 @@ export function CompliancePageClient({
 
   const missed = data?.missed_visits ?? [];
   const missingNotes = data?.missing_notes ?? [];
+  const overduePlans = data?.overdue_care_plan_reviews ?? [];
+  const cqcSummary = data?.cqc_summary;
+  const cqcItems = data?.cqc_items ?? [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap items-end gap-4">
         <label className="block text-sm font-medium text-slate-700">
           From
@@ -107,6 +121,59 @@ export function CompliancePageClient({
 
       {loading && !error && (
         <p className="text-sm text-slate-500">Loading compliance data…</p>
+      )}
+
+      {!loading && !error && cqcSummary && (
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-slate-900">CQC evidence register</h2>
+            <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+              <span>
+                Open: <strong className="text-slate-900">{cqcSummary.open_count}</strong>
+              </span>
+              <span>
+                Overdue:{" "}
+                <strong className="text-amber-800">{cqcSummary.overdue_count}</strong>
+              </span>
+              <span>
+                High risk open:{" "}
+                <strong className="text-red-800">{cqcSummary.high_risk_open_count}</strong>
+              </span>
+            </div>
+          </div>
+          <CqcCategoryCards summary={cqcSummary} />
+          <CqcEvidenceForm onCreated={() => load(start, end)} />
+          <CqcEvidenceList items={cqcItems} onUpdated={() => load(start, end)} />
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Recently completed</h3>
+            <div className="mt-2">
+              <CqcRecentlyCompleted items={cqcSummary.recently_completed} />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {!loading && !error && (
+        <ComplianceSection
+          title="Overdue care plan reviews"
+          count={overduePlans.length}
+          emptyMessage="No overdue care plan reviews."
+        >
+          <ul className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
+            {overduePlans.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="font-medium text-slate-900">{p.client_name}</span>
+                <span className="text-amber-800">Due {p.review_due_date}</span>
+                <Link
+                  href={`/clients/${p.client_id}/care-plan`}
+                  className="text-blue-600 hover:text-blue-800"
+                >
+                  Open care plan
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </ComplianceSection>
       )}
 
       {!loading && !error && (
@@ -220,9 +287,7 @@ function ComplianceSection({
     <section className="space-y-2">
       <h2 className="text-lg font-semibold text-slate-900">
         {title}
-        <span className="ml-2 text-base font-normal text-slate-500">
-          ({count})
-        </span>
+        <span className="ml-2 text-base font-normal text-slate-500">({count})</span>
       </h2>
       {count === 0 ? (
         <p className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">

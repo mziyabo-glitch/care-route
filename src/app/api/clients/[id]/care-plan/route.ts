@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentAgencyId } from "@/lib/agency";
+import { canWriteCarePlan, getCurrentRole } from "@/lib/permissions";
 import {
   DEFAULT_CARE_PLAN_SECTION_TEMPLATES,
   getCarePlanByIdForClient,
@@ -59,9 +60,12 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const agencyId = await getCurrentAgencyId();
-  if (!agencyId) {
+  const { agencyId, role } = await getCurrentRole();
+  if (!agencyId || !role) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!canWriteCarePlan(role)) {
+    return NextResponse.json({ error: "Managers only" }, { status: 403 });
   }
 
   const { id: clientId } = await params;
@@ -152,6 +156,16 @@ export async function POST(
   }
 
   const plan = data as CarePlanRow;
+  const review_due_default = new Date();
+  review_due_default.setUTCDate(review_due_default.getUTCDate() + 90);
+  const review_due_date = review_due_default.toISOString().slice(0, 10);
+
+  await supabase
+    .from("care_plans")
+    .update({ review_due_date, updated_at: now })
+    .eq("id", plan.id)
+    .eq("agency_id", agencyId);
+
   const sectionRows = DEFAULT_CARE_PLAN_SECTION_TEMPLATES.map((t) => ({
     agency_id: agencyId,
     care_plan_id: plan.id,
@@ -159,6 +173,7 @@ export async function POST(
     body: "",
     sort_order: t.sort_order,
     section_key: t.section_key,
+    confidentiality_level: t.confidentiality_level ?? "standard",
     updated_at: now,
   }));
 
@@ -180,9 +195,12 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const agencyId = await getCurrentAgencyId();
-  if (!agencyId) {
+  const { agencyId, role } = await getCurrentRole();
+  if (!agencyId || !role) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!canWriteCarePlan(role)) {
+    return NextResponse.json({ error: "Managers only" }, { status: 403 });
   }
 
   const { id: clientId } = await params;
@@ -217,6 +235,34 @@ export async function PATCH(
     );
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (body.mark_reviewed === true) {
+    const now = new Date().toISOString();
+    const nextReview = new Date();
+    nextReview.setUTCDate(nextReview.getUTCDate() + 90);
+    const { data, error } = await supabase
+      .from("care_plans")
+      .update({
+        last_reviewed_at: now,
+        last_reviewed_by: user?.id ?? null,
+        review_due_date: nextReview.toISOString().slice(0, 10),
+        updated_at: now,
+      })
+      .eq("id", planId)
+      .eq("agency_id", agencyId)
+      .eq("client_id", clientId)
+      .select("*")
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return NextResponse.json({ plan: data as CarePlanRow });
+  }
+
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
@@ -245,6 +291,19 @@ export async function PATCH(
       typeof body.effective_to === "string" && body.effective_to.trim()
         ? body.effective_to.trim()
         : null;
+  }
+  if (body.review_due_date !== undefined) {
+    updates.review_due_date =
+      typeof body.review_due_date === "string" && body.review_due_date.trim()
+        ? body.review_due_date.trim()
+        : null;
+  }
+  if (body.confidentiality_level !== undefined) {
+    const level = String(body.confidentiality_level);
+    if (!["standard", "restricted"].includes(level)) {
+      return NextResponse.json({ error: "Invalid confidentiality_level" }, { status: 400 });
+    }
+    updates.confidentiality_level = level;
   }
 
   const { data, error } = await supabase

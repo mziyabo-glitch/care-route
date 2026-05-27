@@ -4,6 +4,11 @@ import {
   defaultComplianceDateRange,
   getComplianceIssues,
 } from "@/lib/compliance-data";
+import { loadOverdueCarePlanReviews } from "@/lib/care-plan-data";
+import {
+  loadCqcEvidenceForAgency,
+  summariseCqcEvidence,
+} from "@/lib/cqc-evidence-data";
 import { canAccessCompliance, getCurrentRole } from "@/lib/permissions";
 import { parseVisitMapDateParam } from "@/lib/visit-map";
 
@@ -75,11 +80,32 @@ export async function GET(request: Request) {
       end
     );
 
+    let overdue_care_plan_reviews: Awaited<
+      ReturnType<typeof loadOverdueCarePlanReviews>
+    > = [];
+    let cqcItems: Awaited<ReturnType<typeof loadCqcEvidenceForAgency>> = [];
+    try {
+      overdue_care_plan_reviews = await loadOverdueCarePlanReviews(
+        supabase,
+        agencyId
+      );
+    } catch {
+      /* schema not migrated yet */
+    }
+    try {
+      cqcItems = await loadCqcEvidenceForAgency(supabase, agencyId);
+    } catch {
+      /* schema not migrated yet */
+    }
+
     return NextResponse.json({
       start,
       end,
       missed_visits,
       missing_notes,
+      overdue_care_plan_reviews,
+      cqc_summary: summariseCqcEvidence(cqcItems),
+      cqc_items: cqcItems,
     });
   } catch (e) {
     const message =

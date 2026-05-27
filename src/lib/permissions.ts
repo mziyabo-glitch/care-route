@@ -9,6 +9,11 @@ export {
   canView,
   canAccessVisitMap,
   canAccessCompliance,
+  canWriteCarePlan,
+  canViewRestrictedCarePlan,
+  canAccessPayroll,
+  canAccessBilling,
+  isCarerRole,
   normalizeRole,
   roleLabel,
 } from "@/lib/roles";

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentAgencyId } from "@/lib/agency";
+import { canViewRestrictedCarePlan, canWriteCarePlan, getCurrentRole } from "@/lib/permissions";
 import { CarePlanPageClient } from "./care-plan-page-client";
 
 export default async function ClientCarePlanPage({
@@ -33,6 +34,8 @@ export default async function ClientCarePlanPage({
     (row.name && row.name.trim()) ||
     "Client";
 
+  const { role } = await getCurrentRole();
+
   return (
     <div className="space-y-6">
       <div>
@@ -46,7 +49,11 @@ export default async function ClientCarePlanPage({
       <h1 className="text-2xl font-semibold text-slate-900">
         Care plan — {displayName}
       </h1>
-      <CarePlanPageClient clientId={id} />
+      <CarePlanPageClient
+        clientId={id}
+        canWrite={canWriteCarePlan(role)}
+        canViewRestricted={canViewRestrictedCarePlan(role)}
+      />
     </div>
   );
 }

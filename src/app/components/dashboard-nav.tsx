@@ -8,11 +8,13 @@ export function DashboardNav({
   canAccessPayroll = false,
   canAccessVisitMap = false,
   canAccessCompliance = false,
+  showCarersNav = true,
 }: {
   canAccessBilling?: boolean;
   canAccessPayroll?: boolean;
   canAccessVisitMap?: boolean;
   canAccessCompliance?: boolean;
+  showCarersNav?: boolean;
 }) {
   const pathname = usePathname();
   const link = "rounded-lg px-4 py-2 text-sm font-medium transition-colors";
@@ -33,12 +35,14 @@ export function DashboardNav({
       >
         Clients
       </Link>
-      <Link
-        href="/carers"
-        className={`${link} ${pathname.startsWith("/carers") ? activeLink : inactiveLink}`}
-      >
-        Carers
-      </Link>
+      {showCarersNav ? (
+        <Link
+          href="/carers"
+          className={`${link} ${pathname.startsWith("/carers") ? activeLink : inactiveLink}`}
+        >
+          Carers
+        </Link>
+      ) : null}
       <Link
         href="/visits"
         className={`${link} ${pathname.startsWith("/visits") ? activeLink : inactiveLink}`}

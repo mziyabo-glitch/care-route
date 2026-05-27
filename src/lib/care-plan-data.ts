@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+export type ConfidentialityLevel = "standard" | "restricted";
+
 export type CarePlanRow = {
   id: string;
   agency_id: string;
@@ -8,6 +10,10 @@ export type CarePlanRow = {
   version: number;
   effective_from: string | null;
   effective_to: string | null;
+  review_due_date: string | null;
+  last_reviewed_at: string | null;
+  last_reviewed_by: string | null;
+  confidentiality_level: ConfidentialityLevel;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -21,24 +27,89 @@ export type CarePlanSectionRow = {
   title: string;
   body: string;
   section_key: string | null;
+  confidentiality_level: ConfidentialityLevel;
   created_at: string;
   updated_at: string;
 };
 
-/** Default sections created when a new care plan is inserted (POST). */
+/** Default domiciliary care plan sections created on POST. */
 export const DEFAULT_CARE_PLAN_SECTION_TEMPLATES: ReadonlyArray<{
   section_key: string;
   title: string;
   sort_order: number;
+  confidentiality_level?: ConfidentialityLevel;
 }> = [
-  { section_key: "needs", title: "Needs", sort_order: 0 },
-  { section_key: "risks", title: "Risks", sort_order: 1 },
-  { section_key: "medication", title: "Medication", sort_order: 2 },
-  { section_key: "preferences", title: "Preferences", sort_order: 3 },
+  { section_key: "personal_details", title: "Personal details / preferred name", sort_order: 0 },
+  { section_key: "important_contacts", title: "Important contacts", sort_order: 1 },
+  { section_key: "medical_conditions", title: "Medical conditions", sort_order: 2 },
+  { section_key: "medication_support", title: "Medication support notes", sort_order: 3 },
   { section_key: "mobility", title: "Mobility", sort_order: 4 },
-  { section_key: "nutrition_hydration", title: "Nutrition / Hydration", sort_order: 5 },
-  { section_key: "emergency", title: "Emergency / Escalation Notes", sort_order: 6 },
+  { section_key: "personal_care", title: "Personal care", sort_order: 5 },
+  { section_key: "nutrition_hydration", title: "Nutrition and hydration", sort_order: 6 },
+  { section_key: "communication_needs", title: "Communication needs", sort_order: 7 },
+  { section_key: "risks_hazards", title: "Risks and hazards", sort_order: 8 },
+  { section_key: "preferences_routines", title: "Preferences and routines", sort_order: 9 },
+  { section_key: "emergency_instructions", title: "Emergency instructions", sort_order: 10 },
+  {
+    section_key: "confidential_notes",
+    title: "Confidential notes",
+    sort_order: 11,
+    confidentiality_level: "restricted",
+  },
 ];
+
+export function isCarePlanReviewOverdue(plan: CarePlanRow): boolean {
+  if (plan.status === "archived" || !plan.review_due_date) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return plan.review_due_date < today;
+}
+
+export type OverdueCarePlanReview = {
+  id: string;
+  client_id: string;
+  client_name: string;
+  review_due_date: string;
+  status: string;
+};
+
+export async function loadOverdueCarePlanReviews(
+  supabase: SupabaseClient,
+  agencyId: string
+): Promise<OverdueCarePlanReview[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: plans, error } = await supabase
+    .from("care_plans")
+    .select("id, client_id, review_due_date, status")
+    .eq("agency_id", agencyId)
+    .in("status", ["draft", "active"])
+    .not("review_due_date", "is", null)
+    .lt("review_due_date", today);
+
+  if (error) throw new Error(error.message);
+  if (!plans?.length) return [];
+
+  const clientIds = [...new Set(plans.map((p) => p.client_id as string))];
+  const { data: clients, error: clientErr } = await supabase
+    .from("clients")
+    .select("id, full_name, name")
+    .eq("agency_id", agencyId)
+    .in("id", clientIds);
+
+  if (clientErr) throw new Error(clientErr.message);
+
+  const nameById = new Map<string, string>();
+  for (const c of clients ?? []) {
+    nameById.set(c.id as string, (c.full_name as string) || (c.name as string) || "Unknown client");
+  }
+
+  return plans.map((p) => ({
+    id: p.id as string,
+    client_id: p.client_id as string,
+    client_name: nameById.get(p.client_id as string) ?? "Unknown client",
+    review_due_date: p.review_due_date as string,
+    status: p.status as string,
+  }));
+}
 
 /**
  * Server-only: confirms the client row exists under the resolved agency (never trust client agency_id).

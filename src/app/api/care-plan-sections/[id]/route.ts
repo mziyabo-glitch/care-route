@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentAgencyId } from "@/lib/agency";
+import { canWriteCarePlan, getCurrentRole } from "@/lib/permissions";
 import type { CarePlanSectionRow } from "@/lib/care-plan-data";
 
 async function loadSectionWithPlanClient(
@@ -44,9 +44,12 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const agencyId = await getCurrentAgencyId();
-  if (!agencyId) {
+  const { agencyId, role } = await getCurrentRole();
+  if (!agencyId || !role) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!canWriteCarePlan(role)) {
+    return NextResponse.json({ error: "Managers only" }, { status: 403 });
   }
 
   const { id: sectionId } = await params;
@@ -89,6 +92,13 @@ export async function PATCH(
         ? body.section_key.trim()
         : null;
   }
+  if (body.confidentiality_level !== undefined) {
+    const level = String(body.confidentiality_level);
+    if (!["standard", "restricted"].includes(level)) {
+      return NextResponse.json({ error: "Invalid confidentiality_level" }, { status: 400 });
+    }
+    updates.confidentiality_level = level;
+  }
 
   const { data, error } = await supabase
     .from("care_plan_sections")
@@ -109,9 +119,12 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const agencyId = await getCurrentAgencyId();
-  if (!agencyId) {
+  const { agencyId, role } = await getCurrentRole();
+  if (!agencyId || !role) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!canWriteCarePlan(role)) {
+    return NextResponse.json({ error: "Managers only" }, { status: 403 });
   }
 
   const { id: sectionId } = await params;

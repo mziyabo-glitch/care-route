@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentAgencyId } from "@/lib/agency";
+import { canWriteCarePlan, getCurrentRole } from "@/lib/permissions";
 import {
   getCarePlanByIdForClient,
   verifyClientBelongsToAgency,
@@ -11,9 +11,12 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const agencyId = await getCurrentAgencyId();
-  if (!agencyId) {
+  const { agencyId, role } = await getCurrentRole();
+  if (!agencyId || !role) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!canWriteCarePlan(role)) {
+    return NextResponse.json({ error: "Managers only" }, { status: 403 });
   }
 
   const { id: clientId } = await params;
@@ -55,6 +58,15 @@ export async function POST(
       ? body.section_key.trim()
       : null;
 
+  let confidentiality_level = "standard";
+  if (body.confidentiality_level !== undefined) {
+    const level = String(body.confidentiality_level);
+    if (!["standard", "restricted"].includes(level)) {
+      return NextResponse.json({ error: "Invalid confidentiality_level" }, { status: 400 });
+    }
+    confidentiality_level = level;
+  }
+
   const now = new Date().toISOString();
 
   const { data, error } = await supabase
@@ -66,6 +78,7 @@ export async function POST(
       body: sectionBody,
       sort_order,
       section_key,
+      confidentiality_level,
       updated_at: now,
     })
     .select("*")

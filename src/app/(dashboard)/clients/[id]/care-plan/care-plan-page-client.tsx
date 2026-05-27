@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { isCarePlanReviewOverdue } from "@/lib/care-plan-data";
+import {
+  ConfidentialBadge,
+  ConfidentialityNotice,
+  RestrictedAccessBadge,
+} from "@/app/components/confidentiality-badges";
 
 type CarePlan = {
   id: string;
@@ -8,6 +14,9 @@ type CarePlan = {
   version: number;
   effective_from: string | null;
   effective_to: string | null;
+  review_due_date?: string | null;
+  last_reviewed_at?: string | null;
+  confidentiality_level?: string;
   updated_at: string;
 };
 
@@ -17,9 +26,18 @@ type Section = {
   title: string;
   body: string;
   section_key: string | null;
+  confidentiality_level?: string;
 };
 
-export function CarePlanPageClient({ clientId }: { clientId: string }) {
+export function CarePlanPageClient({
+  clientId,
+  canWrite = true,
+  canViewRestricted = true,
+}: {
+  clientId: string;
+  canWrite?: boolean;
+  canViewRestricted?: boolean;
+}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [plan, setPlan] = useState<CarePlan | null>(null);
@@ -31,8 +49,10 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
   const [planVersion, setPlanVersion] = useState(1);
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [effectiveTo, setEffectiveTo] = useState("");
+  const [reviewDueDate, setReviewDueDate] = useState("");
   const [savingPlan, setSavingPlan] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [markingReviewed, setMarkingReviewed] = useState(false);
 
   const [newTitle, setNewTitle] = useState("");
   const [newBody, setNewBody] = useState("");
@@ -63,6 +83,7 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
         setPlanVersion(p.version);
         setEffectiveFrom(p.effective_from ? p.effective_from.slice(0, 10) : "");
         setEffectiveTo(p.effective_to ? p.effective_to.slice(0, 10) : "");
+        setReviewDueDate(p.review_due_date ? p.review_due_date.slice(0, 10) : "");
       }
     } catch {
       setError("Failed to load care plan");
@@ -92,6 +113,7 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
         setPlanVersion(p.version);
         setEffectiveFrom(p.effective_from ? p.effective_from.slice(0, 10) : "");
         setEffectiveTo(p.effective_to ? p.effective_to.slice(0, 10) : "");
+        setReviewDueDate(p.review_due_date ? p.review_due_date.slice(0, 10) : "");
       }
       setViewingArchivedId(planId);
     } catch {
@@ -173,6 +195,7 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
           version: planVersion,
           effective_from: effectiveFrom || null,
           effective_to: effectiveTo || null,
+          review_due_date: reviewDueDate || null,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -234,6 +257,58 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
     await load();
   }
 
+  async function handleMarkReviewed() {
+    if (!plan) return;
+    setMarkingReviewed(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/clients/${clientId}/care-plan`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan_id: plan.id, mark_reviewed: true }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(typeof data?.error === "string" ? data.error : "Could not mark reviewed");
+        return;
+      }
+      await load();
+    } finally {
+      setMarkingReviewed(false);
+    }
+  }
+
+  const visibleSections = useMemo(
+    () =>
+      sections.filter(
+        (s) =>
+          canViewRestricted ||
+          (s.confidentiality_level ?? "standard") === "standard"
+      ),
+    [sections, canViewRestricted]
+  );
+
+  const standardSections = visibleSections.filter(
+    (s) => (s.confidentiality_level ?? "standard") === "standard"
+  );
+  const restrictedSections = visibleSections.filter(
+    (s) => s.confidentiality_level === "restricted"
+  );
+
+  const reviewOverdue =
+    plan &&
+    isCarePlanReviewOverdue({
+      ...plan,
+      review_due_date: reviewDueDate || plan.review_due_date || null,
+      agency_id: "",
+      client_id: clientId,
+      confidentiality_level: "standard",
+      last_reviewed_at: plan.last_reviewed_at ?? null,
+      last_reviewed_by: null,
+      created_at: "",
+      created_by: null,
+    });
+
   async function deleteSection(id: string) {
     if (!confirm("Delete this section?")) return;
     setError("");
@@ -251,10 +326,11 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
       <p className="text-sm text-slate-600">Loading care plan…</p>
     );
   }
-  const isReadOnly = plan?.status === "archived";
+  const isReadOnly = plan?.status === "archived" || !canWrite;
 
   return (
     <div className="space-y-8">
+      <ConfidentialityNotice />
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
@@ -264,14 +340,21 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
       {!plan ? (
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-slate-600">No care plan yet for this client.</p>
-          <button
-            type="button"
-            onClick={() => void handleCreatePlan()}
-            disabled={savingPlan}
-            className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-60"
-          >
-            {savingPlan ? "Creating…" : "Create care plan"}
-          </button>
+          {canWrite ? (
+            <button
+              type="button"
+              onClick={() => void handleCreatePlan()}
+              disabled={savingPlan}
+              className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-60"
+            >
+              {savingPlan ? "Creating…" : "Create care plan"}
+            </button>
+          ) : (
+            <p className="mt-4 text-sm text-slate-600">
+              You can view care plans for assigned clients. Ask a manager to create or
+              update plans.
+            </p>
+          )}
           {archivedPlans.length > 0 ? (
             <div className="mt-6 border-t border-slate-100 pt-4">
               <h3 className="text-sm font-semibold text-slate-900">Archived plans</h3>
@@ -300,6 +383,17 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
             className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
           >
             <h2 className="text-lg font-semibold text-slate-900">Plan details</h2>
+            {reviewOverdue ? (
+              <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                Care plan review is overdue. Update the plan and mark it reviewed when
+                complete.
+              </p>
+            ) : null}
+            {plan.last_reviewed_at ? (
+              <p className="mt-2 text-xs text-slate-500">
+                Last reviewed: {new Date(plan.last_reviewed_at).toLocaleString()}
+              </p>
+            ) : null}
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <label className="block text-sm">
                 <span className="font-medium text-slate-700">Status</span>
@@ -344,6 +438,18 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
                 />
               </label>
+              <label className="block text-sm">
+                <span className="font-medium text-slate-700">Review due</span>
+                <input
+                  type="date"
+                  value={reviewDueDate}
+                  onChange={(e) => setReviewDueDate(e.target.value)}
+                  disabled={isReadOnly}
+                  className={`mt-1 w-full rounded-lg border px-3 py-2 text-slate-900 ${
+                    reviewOverdue ? "border-amber-400 bg-amber-50" : "border-slate-200"
+                  }`}
+                />
+              </label>
             </div>
             <p className="mt-2 text-xs text-slate-500">
               Last updated: {new Date(plan.updated_at).toLocaleString()}
@@ -355,6 +461,14 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
                 className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
               >
                 {savingPlan ? "Saving…" : "Save plan"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleMarkReviewed()}
+                disabled={savingPlan || archiving || isReadOnly || markingReviewed}
+                className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-60"
+              >
+                {markingReviewed ? "Saving…" : "Mark reviewed"}
               </button>
               <button
                 type="button"
@@ -387,10 +501,16 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">Sections</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Ordered by sort order (lowest first). Plain text only.
+              Ordered by sort order (lowest first). Restricted sections are manager-only.
             </p>
+            {!canViewRestricted && restrictedSections.length === 0 && sections.some((s) => s.confidentiality_level === "restricted") ? (
+              <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                This plan includes confidential sections not shown to your role.{" "}
+                <RestrictedAccessBadge />
+              </p>
+            ) : null}
             <ul className="mt-4 space-y-6">
-              {sections.map((s) => (
+              {standardSections.map((s) => (
                 <SectionEditor
                   key={s.id}
                   section={s}
@@ -400,6 +520,28 @@ export function CarePlanPageClient({ clientId }: { clientId: string }) {
                 />
               ))}
             </ul>
+            {restrictedSections.length > 0 ? (
+              <div className="mt-8 border-t border-amber-200 pt-6">
+                <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-amber-950">
+                  Confidential sections
+                  <ConfidentialBadge />
+                  <RestrictedAccessBadge />
+                </h3>
+                <ul className="mt-4 space-y-6">
+                  {restrictedSections.map((s) => (
+                    <SectionEditor
+                      key={s.id}
+                      section={s}
+                      onSave={(title, body, sort_order) =>
+                        saveSection(s, title, body, sort_order)
+                      }
+                      onDelete={() => void deleteSection(s.id)}
+                      readOnly={isReadOnly}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
             {!isReadOnly ? (
             <form onSubmit={handleAddSection} className="mt-8 border-t border-slate-100 pt-6">
@@ -470,9 +612,23 @@ function SectionEditor({
     }
   }
 
+  const restricted = section.confidentiality_level === "restricted";
+
   return (
-    <li className="rounded-lg border border-slate-100 bg-slate-50/80 p-4">
+    <li
+      className={`rounded-lg border p-4 ${
+        restricted ? "border-amber-200 bg-amber-50/50" : "border-slate-100 bg-slate-50/80"
+      }`}
+    >
       <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {restricted ? (
+            <>
+              <ConfidentialBadge />
+              <RestrictedAccessBadge />
+            </>
+          ) : null}
+        </div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="block min-w-[120px] flex-1 text-sm">
             <span className="font-medium text-slate-700">Title</span>
