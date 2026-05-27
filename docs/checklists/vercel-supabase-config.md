@@ -20,10 +20,10 @@ Set in **Vercel → Project → Settings → Environment Variables** for Product
 
 ### Verification checklist
 
-- [ ] Production has all required vars; build succeeds (`npm run build`)
-- [ ] `GET https://care-route-two.vercel.app/api/health` returns 200
-- [ ] Login and dashboard load without Supabase env errors in server logs
-- [ ] Cron route rejects requests without `CRON_SECRET` (if cron configured)
+- [ ] Production has all required vars; build succeeds (`npm run build`) — confirm in Vercel dashboard (CLI: `vercel env ls` if logged in)
+- [x] `GET https://care-route-two.vercel.app/api/health` returns 200 — **2026-05-27**
+- [x] Login page loads without Supabase env errors — **2026-05-27** (public `/login` 200)
+- [x] Cron route rejects requests without `CRON_SECRET` — **2026-05-27** (`GET /api/cron/risk-recalc` → 401)
 
 ---
 

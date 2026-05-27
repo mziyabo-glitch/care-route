@@ -8,9 +8,21 @@ Checklists: `[docs/checklists/README.md](docs/checklists/README.md)`
 
 ---
 
-## A. Production stabilisation (documentation + manual ops) - **COMPLETE 2026-05-25**
+## A. Production stabilisation (documentation + manual ops) - **COMPLETE 2026-05-25** (re-checked 2026-05-27)
 
 Repo-complete items are checked below. **Production** columns require manual verification on Supabase/Vercel.
+
+### Re-verification 2026-05-27 (automated, no login)
+
+| Check | Result |
+| ----- | ------ |
+| Deploy vs `origin/main` | **Match** — `/api/health` commit `ea5e073` = `origin/main` (`ea5e0738…`) |
+| Public smoke | **Pass** — `/login` 200; `/` and dashboard routes 307 → `/login`; `/api/health` 200; no public 500s |
+| Vercel env vars (dashboard) | **Not verified** — Vercel CLI not installed; infer `NEXT_PUBLIC_*` from live login page; `CRON_SECRET` likely set (cron returns 401, not 500) |
+| Supabase auth URL config | **Not verified** — MCP has no auth-settings read; auth logs show `referer: care-route-two.vercel.app` with 200s |
+| Full `PRODUCTION_SMOKE_TEST.md` | **Pending manual** — requires manager+ login (dashboard, payroll, billing, care plans, etc.) |
+
+**User must confirm:** Vercel dashboard env vars (all four); Supabase Site URL + redirect allow-list; run full smoke while logged in after Section C deploy.
 
 
 | #   | Item                                                                   | Repo | Production                                                       |
@@ -18,9 +30,9 @@ Repo-complete items are checked below. **Production** columns require manual ver
 | 1   | All migrations through `20260228100100` applied                        | [x]  | [x] schema verified 2026-05-19 (MCP); `geocoded_at` applied live |
 | 2   | `NOTIFY pgrst, 'reload schema'` after migrations                       | [x]  | [x] ran 2026-05-19 after `geocoded_at`                           |
 | 3   | `MVP_SCHEMA_CHECKLIST.md` spot-check on live DB                        | [x]  | [x] tables/RPCs/RLS 2026-05-19; UI smoke still manual            |
-| 4   | Vercel env vars set (see config doc)                                   | [x]  | [x] confirmed 2026-05-25                                         |
-| 5   | Supabase auth redirect URLs (prod domain only)                         | [x]  | [x] confirmed 2026-05-25                                         |
-| 6   | Production smoke test completed                                        | [x]  | [x] passed 2026-05-25                                            |
+| 4   | Vercel env vars set (see config doc)                                   | [x]  | [~] inferred 2026-05-27; dashboard confirm still needed          |
+| 5   | Supabase auth redirect URLs (prod domain only)                         | [x]  | [~] logs OK 2026-05-27; dashboard confirm still needed         |
+| 6   | Production smoke test completed                                        | [x]  | [~] public pass 2026-05-27; full smoke needs login (2026-05-25) |
 | 7   | `bootstrap_prerequisites.sql` gap understood (post-payroll migrations) | [x]  | —                                                                |
 | 8   | `RUN_MIGRATIONS.md` lists all 34 migrations                            | [x]  | —                                                                |
 | 9   | `getCurrentAgencyId()` limitation documented (not fixed)               | [x]  | —                                                                |
