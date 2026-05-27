@@ -58,8 +58,19 @@ Public smoke **pass**. Full manager+ smoke and dashboard env confirmation **stil
 
 ---
 
+## E. Demo seed (Swindon Care Demo Agency) — **REPO COMPLETE**
+
+- [x] Scenario seed: 10 clients, 6 carers, CQC evidence, care plans, visits (`scripts/seed-swindon-demo-agency.ts`)
+- [x] [docs/DEMO_SEED_SWINDON.md](docs/DEMO_SEED_SWINDON.md) — audit, scenario table, runbook
+- [ ] Apply migrations on target DB + run `ALLOW_DEMO_SEED=true npm run seed:swindon-demo`
+- [ ] Manual smoke: dashboard, compliance, care plans, confidentiality (carer account)
+
+---
+
 ## Known gaps (unchanged)
 
 - Multi-agency `getCurrentAgencyId()` — newest membership only ([docs/AGENCY_SWITCHER.md](docs/AGENCY_SWITCHER.md))
+- Demo: no `preferred_name` / DOB / emergency contact columns — stored in `clients.notes` until schema extended
+- Demo: Sarah Coordinator has no separate auth user (carer/manager record only)
 - No automated late-visit compliance rule
 - `audit_logs` not surfaced in UI
